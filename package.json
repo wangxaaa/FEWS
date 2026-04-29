@@ -1,0 +1,9 @@
+{
+  "name": "fews-supabase",
+  "version": "1.0.0",
+  "description": "FEWS — Flood Early Warning System (Vercel + Supabase)",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
