@@ -15,8 +15,8 @@ const char* WIFI_PASS = "PASSWORD_WIFI";
 
 // ── Konfigurasi Server ────────────────────────────────────
 // Ganti dengan URL Railway/Render kamu setelah deploy
-const char* SERVER_URL = "https://fews-app.railway.app/api/data";
-const char* API_KEY    = "fews-secret-key"; // harus sama dengan server
+const char* SERVER_URL = "https://fews-hs15.vercel.app/api/data";
+const char* API_KEY    = "fews2026"; // harus sama dengan server
 
 // ── Pin Sensor ────────────────────────────────────────────
 #define DHT_PIN    4      // GPIO DHT22 (suhu & kelembaban)
