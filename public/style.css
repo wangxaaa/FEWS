@@ -53,6 +53,37 @@ body::before {
 .dot { width:7px; height:7px; border-radius:50%; background:var(--green); animation:blink 1.6s ease-in-out infinite; }
 @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.25;} }
 
+/* ── ESP32 Status Indicator ── */
+.esp-status-dot {
+  width:8px; height:8px; border-radius:50%;
+  background:var(--esp-color, var(--red));
+  box-shadow: 0 0 8px var(--esp-glow, rgba(242,85,85,.5));
+  animation: var(--esp-anim, none);
+  transition: all .3s;
+}
+
+/* ── Database Status Indicator ── */
+.db-status-dot {
+  width:8px; height:8px; border-radius:50%;
+  background:var(--db-color, var(--red));
+  box-shadow: 0 0 8px var(--db-glow, rgba(242,85,85,.5));
+  animation: var(--db-anim, none);
+  transition: all .3s;
+}
+
+@keyframes esp-pulse { 0%,100%{opacity:1;} 50%{opacity:.4;} }
+@keyframes db-pulse { 0%,100%{opacity:1;} 50%{opacity:.4;} }
+#esp_status_text {
+  font-size:11px;
+  color: var(--esp-color, var(--red));
+  font-weight:600;
+}
+#db_status_text {
+  font-size:11px;
+  color: var(--db-color, var(--red));
+  font-weight:600;
+}
+
 /* ── Layout ── */
 .wrap { padding:20px 22px 40px; max-width:1180px; margin:0 auto; }
 .row  { display:grid; gap:14px; margin-bottom:14px; }

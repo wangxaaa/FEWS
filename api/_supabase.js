@@ -1,7 +1,7 @@
 // api/_supabase.js
 // Helper untuk Supabase REST API — tanpa library tambahan, pakai fetch biasa
 
-const BASE_URL = process.env.SUPABASE_URL + '/rest/v1';
+const BASE_URL = process.env.SUPABASE_URL;
 const KEY      = process.env.SUPABASE_ANON_KEY;
 
 const headers = {

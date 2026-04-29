@@ -4,6 +4,130 @@ let ESP_IP = window.location.origin;
 const MAX_HIST = 50;
 let histTime=[], histRain=[], histWater=[], histOut=[];
 
+// ── ESP32 Status Tracking ───────────────────────────────
+let espLastData = null;
+let espStatus = 'offline'; // 'online' | 'offline' | 'stale'
+const ESP_ONLINE_THRESHOLD = 10000; // 10 detik
+const ESP_STALE_THRESHOLD  = 30000; // 30 detik
+
+function updateESPStatus() {
+  if (!espLastData) {
+    setESPStatus('offline');
+    return;
+  }
+  
+  const now = Date.now();
+  const age = now - espLastData;
+  
+  if (age < ESP_ONLINE_THRESHOLD) {
+    setESPStatus('online', age);
+  } else if (age < ESP_STALE_THRESHOLD) {
+    setESPStatus('stale', age);
+  } else {
+    setESPStatus('offline', age);
+  }
+}
+
+function setESPStatus(status, ageMs = 0) {
+  if (espStatus === status && status !== 'online') return; // no need to update
+  espStatus = status;
+  
+  const dot   = document.getElementById('esp_status_dot');
+  const text  = document.getElementById('esp_status_text');
+  const seen  = document.getElementById('esp_last_seen');
+  
+  let color, glow, anim, label;
+  
+  if (status === 'online') {
+    color = '#2dce74';
+    glow  = 'rgba(45,206,116,.6)';
+    anim  = 'esp-pulse 1.2s ease-in-out infinite';
+    label = '✓ ESP32: Online';
+  } else if (status === 'stale') {
+    color = '#f0ad3f';
+    glow  = 'rgba(240,173,63,.5)';
+    anim  = 'esp-pulse 0.8s ease-in-out infinite';
+    label = '⚠ ESP32: Delayed';
+  } else {
+    color = '#f25555';
+    glow  = 'rgba(242,85,85,.5)';
+    anim  = 'none';
+    label = '✗ ESP32: Offline';
+  }
+  
+  dot.style.setProperty('--esp-color', color);
+  dot.style.setProperty('--esp-glow', glow);
+  dot.style.setProperty('--esp-anim', anim);
+  text.innerText = label;
+  
+  if (ageMs > 0) {
+    const secs = Math.floor(ageMs / 1000);
+    seen.innerText = `(${secs}s ago)`;
+  }
+}
+
+// ── Database Status Tracking ────────────────────────────
+let dbLastCheck = null;
+let dbStatus = 'offline'; // 'online' | 'offline' | 'stale'
+const DB_ONLINE_THRESHOLD = 10000; // 10 detik
+const DB_STALE_THRESHOLD  = 30000; // 30 detik
+
+function updateDBStatus() {
+  if (!dbLastCheck) {
+    setDBStatus('offline');
+    return;
+  }
+  
+  const now = Date.now();
+  const age = now - dbLastCheck;
+  
+  if (age < DB_ONLINE_THRESHOLD) {
+    setDBStatus('online', age);
+  } else if (age < DB_STALE_THRESHOLD) {
+    setDBStatus('stale', age);
+  } else {
+    setDBStatus('offline', age);
+  }
+}
+
+function setDBStatus(status, ageMs = 0) {
+  if (dbStatus === status && status !== 'online') return; // no need to update
+  dbStatus = status;
+  
+  const dot   = document.getElementById('db_status_dot');
+  const text  = document.getElementById('db_status_text');
+  const seen  = document.getElementById('db_last_seen');
+  
+  let color, glow, anim, label;
+  
+  if (status === 'online') {
+    color = '#2dce74';
+    glow  = 'rgba(45,206,116,.6)';
+    anim  = 'db-pulse 1.2s ease-in-out infinite';
+    label = '✓ Database: Online';
+  } else if (status === 'stale') {
+    color = '#f0ad3f';
+    glow  = 'rgba(240,173,63,.5)';
+    anim  = 'db-pulse 0.8s ease-in-out infinite';
+    label = '⚠ Database: Delayed';
+  } else {
+    color = '#f25555';
+    glow  = 'rgba(242,85,85,.5)';
+    anim  = 'none';
+    label = '✗ Database: Offline';
+  }
+  
+  dot.style.setProperty('--db-color', color);
+  dot.style.setProperty('--db-glow', glow);
+  dot.style.setProperty('--db-anim', anim);
+  text.innerText = label;
+  
+  if (ageMs > 0) {
+    const secs = Math.floor(ageMs / 1000);
+    seen.innerText = `(${secs}s ago)`;
+  }
+}
+
 // ── Chart ──────────────────────────────────────────────────
 Chart.defaults.color = '#4a6080';
 Chart.defaults.font.family = "'DM Mono', monospace";
@@ -227,6 +351,10 @@ async function fetchData() {
 
     lastData = d;
 
+    // Update ESP32 status indicator
+    espLastData = Date.now();
+    updateESPStatus();
+
     const t = now();
     [histTime,histRain,histWater,histOut].forEach((a,i)=>{
       const val = [t, d.curah_hujan, d.tinggi_air, d.output][i];
@@ -252,5 +380,28 @@ function applyIp() {
   fetchData();
 }
 
+// ── Check Database Health ────────────────────────────────
+async function checkDBHealth() {
+  try {
+    const res = await fetch(`${ESP_IP}/api/health`, { signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.database === 'connected') {
+        dbLastCheck = Date.now();
+        updateDBStatus();
+      } else {
+        setDBStatus('offline');
+      }
+    } else {
+      setDBStatus('offline');
+    }
+  } catch (err) {
+    setDBStatus('offline');
+  }
+}
+
 setInterval(fetchData, 3000);
+setInterval(updateESPStatus, 1000); // Update ESP status every second
+setInterval(updateDBStatus, 1000); // Update DB status every second
+setInterval(checkDBHealth, 5000);  // Check DB health every 5 seconds
 fetchData();
