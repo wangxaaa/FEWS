@@ -25,6 +25,7 @@ const char* API_KEY    = "fews2026"; // harus sama dengan server
 #define ECHO_PIN   18     // HC-SR04 echo
 #define RAIN_PIN   34     // Rain sensor analog (ADC)
 #define WIND_PIN   35     // Anemometer analog (ADC)
+#define RESET_BTN  32     // Tombol reset data
 
 DHT dht(DHT_PIN, DHT_TYPE);
 
@@ -112,8 +113,7 @@ void setup() {
   Serial.begin(115200);
   dht.begin();
   pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
-
+  pinMode(ECHO_PIN, INPUT);  pinMode(RESET_BTN, INPUT_PULLUP);
   Serial.println("\n🌊 FEWS ESP32 Starting...");
 
   // Konek WiFi
@@ -140,9 +140,24 @@ String uptimeStr() {
 
 // ── Loop ──────────────────────────────────────────────────
 unsigned long lastSend = 0;
+unsigned long lastBtnCheck = 0;
 const unsigned long INTERVAL = 10000; // kirim setiap 10 detik
+const unsigned long BTN_DEBOUNCE = 500; // debounce 500ms
 
 void loop() {
+  // Cek tombol reset (debounce)
+  if (millis() - lastBtnCheck > BTN_DEBOUNCE) {
+    lastBtnCheck = millis();
+    if (digitalRead(RESET_BTN) == LOW) {
+      corrCount = 0;
+      corrIdx = 0;
+      memset(corrRain, 0, sizeof(corrRain));
+      memset(corrWater, 0, sizeof(corrWater));
+      Serial.println("🔄 Data reset! Correlation data cleared.");
+      delay(1000); // tunggu tombol dilepas
+    }
+  }
+
   if (millis() - lastSend < INTERVAL) return;
   lastSend = millis();
 
