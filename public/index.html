@@ -4,53 +4,39 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FEWS | Flood Early Warning System</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
-</head>
-<body>
-
 <header class="hdr">
   <div class="hdr-brand">
-    <div class="hdr-icon">🌊</div>
     <div>
       <div class="hdr-title">FLOOD EARLY WARNING SYSTEM</div>
-      <div class="hdr-sub">ESP32 → Server · Pearson Correlation · Realtime</div>
+      <div class="hdr-sub">ESP32 · Pearson Correlation · Realtime</div>
     </div>
   </div>
   <div class="hdr-live">
-    <div style="display:flex; align-items:center; gap:16px; border-right:1px solid var(--border); padding-right:16px; margin-right:16px;">
-      <div style="display:flex; align-items:center; gap:6px;">
-        <div class="dot"></div>
-        <span id="hdr_uptime">00:00:00</span>
-        <span style="font-size:9px; color:var(--muted); margin-left:2px;">Dashboard</span>
-      </div>
+    <div style="display:flex; align-items:center; gap:8px; padding-right:14px; margin-right:6px; border-right:1px solid var(--border);">
+      <div class="dot"></div>
+      <span id="hdr_uptime">00:00:00</span>
+      <span style="font-size:10px; color:var(--text-dim);">Dashboard</span>
     </div>
-    <div style="display:flex; align-items:center; gap:6px; margin-right:16px; border-right:1px solid var(--border); padding-right:16px;">
+    <div style="display:flex; align-items:center; gap:7px; padding-right:14px; margin-right:6px; border-right:1px solid var(--border);">
       <div class="esp-status-dot" id="esp_status_dot"></div>
       <span id="esp_status_text">ESP32: Offline</span>
-      <span id="esp_last_seen" style="font-size:9px; color:var(--muted); margin-left:6px;">-</span>
+      <span id="esp_last_seen" style="font-size:10px; color:var(--text-dim);">-</span>
     </div>
-    <div style="display:flex; align-items:center; gap:6px;">
+    <div style="display:flex; align-items:center; gap:7px;">
       <div class="db-status-dot" id="db_status_dot"></div>
       <span id="db_status_text">Database: Offline</span>
-      <span id="db_last_seen" style="font-size:9px; color:var(--muted); margin-left:6px;">-</span>
+      <span id="db_last_seen" style="font-size:10px; color:var(--text-dim);">-</span>
     </div>
   </div>
 </header>
 
 <div class="wrap">
-
-  <!-- Server Config -->
-  <div class="cfg">
-    <label>Server URL</label>
-    <input type="text" id="espIp" value="" placeholder="https://fews-app.railway.app">
-    <button class="btn-conn" onclick="applyIp()">Hubungkan</button>
-    <span id="conn_status" class="conn-ok" style="color:var(--muted)">Menunggu koneksi…</span>
-  </div>
 
   <!-- CSV Logger Bar -->
   <div class="csv-bar">
@@ -59,7 +45,7 @@
       <span>Logger CSV → Database</span>
     </div>
     <span class="csv-count">Tersimpan: <strong id="csv_count">0</strong> baris</span>
-    <span style="font-size:10px;font-family:var(--mono);color:var(--muted)">Interval log: 10 detik</span>
+    <span style="font-size:11px;font-family:var(--mono);color:var(--text-dim)">Interval: 10 detik</span>
     <button class="btn-csv" id="btn_download" onclick="downloadCSV()" disabled>⬇ Unduh CSV</button>
     <button class="btn-csv-clear" onclick="clearCSV()">✕ Hapus Log</button>
     <span class="csv-timer">Log berikutnya: <span id="csv_countdown">10</span>d</span>
@@ -68,25 +54,25 @@
   <!-- Row 1: 5 Sensor Cards -->
   <div class="row r5">
 
-    <div class="card" style="--stripe:var(--red)">
+    <div class="card" style="--stripe:var(--green)">
       <div class="c-label">🌧️ Curah Hujan</div>
       <div class="c-val"><span id="rain">--</span><span class="c-unit">mm</span></div>
       <div class="c-sub" id="rain_cat">–</div>
     </div>
 
-    <div class="card" style="--stripe:var(--blue)">
+    <div class="card" style="--stripe:var(--green)">
       <div class="c-label">📏 Tinggi Air</div>
       <div class="c-val"><span id="water">--</span><span class="c-unit">cm</span></div>
       <div class="c-sub" id="water_cat">–</div>
     </div>
 
-    <div class="card" style="--stripe:#c084fc">
+    <div class="card" style="--stripe:var(--green)">
       <div class="c-label">🌡️ Suhu</div>
       <div class="c-val"><span id="temp">--</span><span class="c-unit">°C</span></div>
       <div class="c-sub">Lingkungan</div>
     </div>
 
-    <div class="card" style="--stripe:#38bdf8">
+    <div class="card" style="--stripe:var(--green)">
       <div class="c-label">💧 Kelembaban</div>
       <div class="c-val"><span id="hum">--</span><span class="c-unit">%</span></div>
       <div class="c-sub">Udara</div>
@@ -132,28 +118,44 @@
     </div>
 
     <!-- Right: Correlation + Info -->
-    <div style="display:flex; flex-direction:column; gap:14px;">
+    <div style="display:flex; flex-direction:column; gap:12px;">
 
-      <div class="card" style="--stripe:var(--yellow)">
-        <div class="c-label" style="color:var(--yellow)">📊 Korelasi Pearson (r)</div>
+      <div class="card" style="--stripe:var(--green)">
+        <div class="c-label" style="color:var(--green)">📊 Korelasi Pearson (r)</div>
         <div class="corr-val" id="corr_r">0.000</div>
         <div class="corr-bar-wrap">
-          <div class="corr-scale"><span>−1</span><span id="corr_desc">Belum cukup data</span><span>+1</span></div>
+          <div class="corr-scale">
+            <span>−1</span>
+            <span id="corr_desc">Belum cukup data</span>
+            <span>+1</span>
+          </div>
           <div class="corr-track">
             <div class="corr-fill"></div>
             <div class="corr-thumb" id="corr_thumb" style="left:50%"></div>
           </div>
         </div>
-        <div class="corr-desc">Sampel: <span id="corr_sample">0</span> / 20 (curah hujan × tinggi air)</div>
+        <div class="corr-desc">Sampel: <span id="corr_sample">0</span> / ∞ (unlimited)</div>
       </div>
 
       <div class="card" style="--stripe:var(--green); flex:1">
         <div class="c-label">ℹ️ Info Sistem</div>
         <div class="info-grid">
-          <div class="ig-item"><div class="ig-k">Uptime</div><div class="ig-v" id="info_uptime">--:--:--</div></div>
-          <div class="ig-item"><div class="ig-k">AP IP</div><div class="ig-v">192.168.4.1</div></div>
-          <div class="ig-item"><div class="ig-k">Server</div><div class="ig-v" id="info_staip" style="font-size:10px">--</div></div>
-          <div class="ig-item"><div class="ig-k">Data Age</div><div class="ig-v" id="info_age">-- s</div></div>
+          <div class="ig-item">
+            <div class="ig-k">Uptime</div>
+            <div class="ig-v" id="info_uptime">--:--:--</div>
+          </div>
+          <div class="ig-item">
+            <div class="ig-k">AP IP</div>
+            <div class="ig-v">192.168.4.1</div>
+          </div>
+          <div class="ig-item">
+            <div class="ig-k">Server</div>
+            <div class="ig-v" id="info_staip" style="font-size:10px">--</div>
+          </div>
+          <div class="ig-item">
+            <div class="ig-k">Data Age</div>
+            <div class="ig-v" id="info_age">-- s</div>
+          </div>
         </div>
       </div>
 
@@ -166,13 +168,13 @@
       <span class="chart-ttl">Histori: Curah Hujan & Tinggi Air</span>
       <span class="chart-sub">50 data terakhir</span>
     </div>
-    <canvas id="chart" height="120"></canvas>
+    <canvas id="chart" height="110"></canvas>
   </div>
 
 </div>
 
 <footer>
-  FLOOD EARLY WARNING SYSTEM (FEWS) &copy; 2026 &nbsp;|&nbsp; ESP32 · Pearson Correlation &nbsp;|&nbsp; Dashboard v2.0 (Frontend/Backend Separated)
+  FLOOD EARLY WARNING SYSTEM (FEWS) &copy; 2026 &nbsp;·&nbsp; ESP32 · Pearson Correlation &nbsp;·&nbsp; Dashboard v2.0
 </footer>
 
 <script src="client.js"></script>

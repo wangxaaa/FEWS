@@ -321,8 +321,9 @@ async function fetchData() {
     const res  = await fetch(`${ESP_IP}/api`, { signal: AbortSignal.timeout(4000) });
     const d    = await res.json();
 
-    document.getElementById('conn_status').className = 'conn-ok';
-    document.getElementById('conn_status').innerText  = '✓ Terhubung — '+now();
+    // conn_status element removed from UI
+    // document.getElementById('conn_status').className = 'conn-ok';
+    // document.getElementById('conn_status').innerText  = '✓ Terhubung — '+now();
 
     document.getElementById('rain').innerText  = d.curah_hujan.toFixed(1);
     document.getElementById('water').innerText = d.tinggi_air.toFixed(1);
@@ -367,17 +368,18 @@ async function fetchData() {
     chart.update('none');
 
   } catch(err) {
-    document.getElementById('conn_status').className = 'conn-err';
-    document.getElementById('conn_status').innerText  = '✗ Gagal — '+err.message;
+    // Error handling - removed conn_status element
+    console.error('Error:', err.message);
   }
 }
 
 function applyIp() {
-  const raw = document.getElementById('espIp').value.trim();
-  ESP_IP = raw ? raw.replace(/\/$/, '') : window.location.origin;
-  document.getElementById('conn_status').className = '';
-  document.getElementById('conn_status').innerText = 'Menghubungkan…';
-  fetchData();
+  // Server config removed from UI
+  // const raw = document.getElementById('espIp').value.trim();
+  // ESP_IP = raw ? raw.replace(/\/$/, '') : window.location.origin;
+  // document.getElementById('conn_status').className = '';
+  // document.getElementById('conn_status').innerText = 'Menghubungkan…';
+  // fetchData();
 }
 
 // ── Check Database Health ────────────────────────────────
