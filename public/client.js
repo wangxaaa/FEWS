@@ -36,28 +36,23 @@ function setESPStatus(status, ageMs = 0) {
   const text  = document.getElementById('esp_status_text');
   const seen  = document.getElementById('esp_last_seen');
   
-  let color, glow, anim, label;
+  let color, anim, label;
   
   if (status === 'online') {
     color = '#2dce74';
-    glow  = 'rgba(45,206,116,.6)';
-    anim  = 'esp-pulse 1.2s ease-in-out infinite';
+    anim  = 'esp-pulse 2s ease-in-out infinite';
     label = '✓ ESP32: Online';
   } else if (status === 'stale') {
-    color = '#f0ad3f';
-    glow  = 'rgba(240,173,63,.5)';
-    anim  = 'esp-pulse 0.8s ease-in-out infinite';
-    label = '⚠ ESP32: Delayed';
+    color = '#f25555';
+    anim  = 'none';
+    label = '✗ ESP32: Offline';
   } else {
     color = '#f25555';
-    glow  = 'rgba(242,85,85,.5)';
     anim  = 'none';
     label = '✗ ESP32: Offline';
   }
   
   dot.style.setProperty('--esp-color', color);
-  dot.style.setProperty('--esp-glow', glow);
-  dot.style.setProperty('--esp-anim', anim);
   text.innerText = label;
   
   if (ageMs > 0) {
@@ -98,28 +93,23 @@ function setDBStatus(status, ageMs = 0) {
   const text  = document.getElementById('db_status_text');
   const seen  = document.getElementById('db_last_seen');
   
-  let color, glow, anim, label;
+  let color, anim, label;
   
   if (status === 'online') {
     color = '#2dce74';
-    glow  = 'rgba(45,206,116,.6)';
-    anim  = 'db-pulse 1.2s ease-in-out infinite';
+    anim  = 'db-pulse 2s ease-in-out infinite';
     label = '✓ Database: Online';
   } else if (status === 'stale') {
-    color = '#f0ad3f';
-    glow  = 'rgba(240,173,63,.5)';
-    anim  = 'db-pulse 0.8s ease-in-out infinite';
-    label = '⚠ Database: Delayed';
+    color = '#f25555';
+    anim  = 'none';
+    label = '✗ Database: Offline';
   } else {
     color = '#f25555';
-    glow  = 'rgba(242,85,85,.5)';
     anim  = 'none';
     label = '✗ Database: Offline';
   }
   
   dot.style.setProperty('--db-color', color);
-  dot.style.setProperty('--db-glow', glow);
-  dot.style.setProperty('--db-anim', anim);
   text.innerText = label;
   
   if (ageMs > 0) {
