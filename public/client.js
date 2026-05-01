@@ -19,10 +19,8 @@ function updateESPStatus() {
   const now = Date.now();
   const age = now - espLastData;
   
-  if (age < ESP_ONLINE_THRESHOLD) {
+  if (age < ESP_STALE_THRESHOLD) {
     setESPStatus('online', age);
-  } else if (age < ESP_STALE_THRESHOLD) {
-    setESPStatus('stale', age);
   } else {
     setESPStatus('offline', age);
   }
@@ -40,12 +38,8 @@ function setESPStatus(status, ageMs = 0) {
   
   if (status === 'online') {
     color = '#2dce74';
-    anim  = 'esp-pulse 2s ease-in-out infinite';
-    label = '✓ ESP32: Online';
-  } else if (status === 'stale') {
-    color = '#f25555';
     anim  = 'none';
-    label = '✗ ESP32: Offline';
+    label = '✓ ESP32: Online';
   } else {
     color = '#f25555';
     anim  = 'none';
@@ -53,6 +47,7 @@ function setESPStatus(status, ageMs = 0) {
   }
   
   dot.style.setProperty('--esp-color', color);
+  dot.style.animation = anim;
   text.innerText = label;
   
   if (ageMs > 0) {
@@ -76,10 +71,8 @@ function updateDBStatus() {
   const now = Date.now();
   const age = now - dbLastCheck;
   
-  if (age < DB_ONLINE_THRESHOLD) {
+  if (age < DB_STALE_THRESHOLD) {
     setDBStatus('online', age);
-  } else if (age < DB_STALE_THRESHOLD) {
-    setDBStatus('stale', age);
   } else {
     setDBStatus('offline', age);
   }
@@ -97,12 +90,8 @@ function setDBStatus(status, ageMs = 0) {
   
   if (status === 'online') {
     color = '#2dce74';
-    anim  = 'db-pulse 2s ease-in-out infinite';
-    label = '✓ Database: Online';
-  } else if (status === 'stale') {
-    color = '#f25555';
     anim  = 'none';
-    label = '✗ Database: Offline';
+    label = '✓ Database: Online';
   } else {
     color = '#f25555';
     anim  = 'none';
@@ -110,6 +99,7 @@ function setDBStatus(status, ageMs = 0) {
   }
   
   dot.style.setProperty('--db-color', color);
+  dot.style.animation = anim;
   text.innerText = label;
   
   if (ageMs > 0) {
