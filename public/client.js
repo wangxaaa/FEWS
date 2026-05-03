@@ -4,6 +4,32 @@ let ESP_IP = window.location.origin;
 const MAX_HIST = 50;
 let histTime=[], histRain=[], histWater=[], histOut=[];
 
+// ── Theme Mode (Light/Dark) ────────────────────────────
+const THEME_KEY = 'fews_theme_mode';
+
+function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY) || 'dark';
+  setTheme(saved);
+}
+
+function setTheme(mode) {
+  if (mode === 'light') {
+    document.body.classList.add('light-mode');
+    localStorage.setItem(THEME_KEY, 'light');
+    document.getElementById('btn_theme').textContent = '☀️';
+  } else {
+    document.body.classList.remove('light-mode');
+    localStorage.setItem(THEME_KEY, 'dark');
+    document.getElementById('btn_theme').textContent = '🌙';
+  }
+}
+
+function toggleTheme() {
+  const current = localStorage.getItem(THEME_KEY) || 'dark';
+  const next = current === 'dark' ? 'light' : 'dark';
+  setTheme(next);
+}
+
 // ── ESP32 Status Tracking ───────────────────────────────
 let espLastData = null;
 let espStatus = 'offline'; // 'online' | 'offline' | 'stale'
@@ -405,4 +431,5 @@ setInterval(fetchData, 3000);
 setInterval(updateESPStatus, 1000); // Update ESP status every second
 setInterval(updateDBStatus, 1000); // Update DB status every second
 setInterval(checkDBHealth, 5000);  // Check DB health every 5 seconds
+initTheme();  // Initialize theme on page load
 fetchData();

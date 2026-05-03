@@ -3,7 +3,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  /* Supabase dark palette - refined */
+  /* Dark mode (default) */
   --bg:         #05050a;
   --bg-overlay: #0f0f15;
   --s1:         #1a1a24;
@@ -38,6 +38,20 @@
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
+}
+
+/* Light mode */
+body.light-mode {
+  --bg:         #f8f9fa;
+  --bg-overlay: #ffffff;
+  --s1:         #ffffff;
+  --s2:         #f5f6f8;
+  --s3:         #efeff3;
+  --border:     #e0e2e8;
+  --border-sub: #d4d8df;
+  --text:       #1a1a1f;
+  --text-muted: #5a5f7a;
+  --text-dim:   #8b90a8;
 }
 
 body {
@@ -126,6 +140,25 @@ body {
   padding-left: 16px;
   margin-left: 4px;
   border-left: 1px solid var(--border);
+}
+
+/* Theme toggle button */
+.btn-theme {
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-theme:hover {
+  background: var(--s2);
+  border-color: var(--border-sub);
 }
 
 /* ── Layout ── */

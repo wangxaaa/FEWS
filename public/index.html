@@ -28,11 +28,12 @@
       <span id="esp_status_text">ESP32: Offline</span>
       <span id="esp_last_seen" style="font-size:10px; color:var(--text-dim);">-</span>
     </div>
-    <div style="display:flex; align-items:center; gap:7px;">
+    <div style="display:flex; align-items:center; gap:7px; padding-right:14px; margin-right:6px; border-right:1px solid var(--border);">
       <div class="db-status-dot" id="db_status_dot"></div>
       <span id="db_status_text">Database: Offline</span>
       <span id="db_last_seen" style="font-size:10px; color:var(--text-dim);">-</span>
     </div>
+    <button class="btn-theme" id="btn_theme" onclick="toggleTheme()" title="Toggle dark/light mode">🌙</button>
   </div>
 </header>
 
