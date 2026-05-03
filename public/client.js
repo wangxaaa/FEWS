@@ -239,10 +239,10 @@ async function appendCsvRow(d) {
     console.error('Error saving log:', err);
   }
 
-  // Flash dot
+  // Flash dot (instant, no animation)
   const dot = document.getElementById('csv_dot');
-  dot.classList.add('active');
-  setTimeout(()=> dot.classList.remove('active'), 1200);
+  dot.style.opacity = '0.5';
+  setTimeout(()=> dot.style.opacity = '1', 100);
 }
 
 function updateCsvUI() {
