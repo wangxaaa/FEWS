@@ -291,7 +291,8 @@ setInterval(() => {
   document.getElementById('csv_countdown').innerText = csvCountdown;
   if (csvCountdown <= 0) {
     csvCountdown = 10;
-    if (lastData) appendCsvRow(lastData);
+    // Only append CSV row if ESP is online and lastData exists
+    if (lastData && espStatus === 'online') appendCsvRow(lastData);
   }
 }, 1000);
 
@@ -350,6 +351,24 @@ async function fetchData() {
   } catch(err) {
     // Error handling - removed conn_status element
     console.error('Error:', err.message);
+    
+    // Reset all values to 0 when ESP is offline
+    document.getElementById('rain').innerText  = '0';
+    document.getElementById('water').innerText = '0';
+    document.getElementById('temp').innerText  = '0';
+    document.getElementById('hum').innerText   = '0';
+    document.getElementById('wind').innerText  = '0';
+    document.getElementById('rain_cat').innerText  = '—';
+    document.getElementById('water_cat').innerText = '—';
+    document.getElementById('fuzzy_pct').innerHTML = '0<span>%</span>';
+    setStatus(0);
+    document.getElementById('mi_water').innerText = '0 cm';
+    document.getElementById('mi_rain').innerText  = '0 mm';
+    setCorr(0, 0);
+    
+    // Clear lastData and update ESP status
+    lastData = null;
+    updateESPStatus();
   }
 }
 
