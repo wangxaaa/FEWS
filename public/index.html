@@ -52,6 +52,14 @@
     <span class="csv-timer">Log berikutnya: <span id="csv_countdown">10</span>d</span>
   </div>
 
+  <!-- ESP32 IP Config Bar -->
+  <div class="cfg">
+    <label>IP ESP32:</label>
+    <input type="text" id="espIp" placeholder="Contoh: 192.168.137.239 atau http://192.168.4.1" />
+    <button class="btn-conn" onclick="applyIp()">⚡ Hubungkan</button>
+    <span id="conn_status" style="font-size:11px; font-family:var(--mono); color:var(--text-dim); margin-left:auto;"></span>
+  </div>
+
   <!-- Row 1: 5 Sensor Cards -->
   <div class="row r5">
 

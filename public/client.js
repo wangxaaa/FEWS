@@ -4,6 +4,17 @@ let ESP_IP = window.location.origin;
 const MAX_HIST = 50;
 let histTime=[], histRain=[], histWater=[], histOut=[];
 
+// ── Load ESP32 IP from localStorage ────────────────────────────
+const ESP_IP_KEY = 'fews_esp_ip';
+
+function loadESPIp() {
+  const saved = localStorage.getItem(ESP_IP_KEY);
+  if (saved) {
+    ESP_IP = saved;
+    document.getElementById('espIp').value = saved;
+  }
+}
+
 // ── Theme Mode (Light/Dark) ────────────────────────────
 const THEME_KEY = 'fews_theme_mode';
 
@@ -322,6 +333,35 @@ setInterval(() => {
   }
 }, 1000);
 
+// ── Apply ESP32 IP Config ────────────────────────────────────────
+function applyIp() {
+  const raw = document.getElementById('espIp').value.trim();
+  if (!raw) {
+    alert('Masukkan IP address ESP32 terlebih dahulu');
+    return;
+  }
+
+  // Format URL dengan http:// jika belum ada
+  let url = raw;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = 'http://' + url;
+  }
+
+  ESP_IP = url;
+  localStorage.setItem(ESP_IP_KEY, ESP_IP);
+  
+  document.getElementById('conn_status').innerText = '✓ IP tersimpan!';
+  document.getElementById('conn_status').style.color = 'var(--green)';
+  
+  // Fetch data immediately
+  fetchData();
+  
+  // Reset status message after 3 seconds
+  setTimeout(() => {
+    document.getElementById('conn_status').innerText = '';
+  }, 3000);
+}
+
 // ── Fetch Data ──────────────────────────────────────────
 async function fetchData() {
   try {
@@ -463,14 +503,6 @@ async function fetchData() {
   }
 }
 
-function applyIp() {
-  // Server config removed from UI
-  // const raw = document.getElementById('espIp').value.trim();
-  // ESP_IP = raw ? raw.replace(/\/$/, '') : window.location.origin;
-  // document.getElementById('conn_status').className = '';
-  // document.getElementById('conn_status').innerText = 'Menghubungkan…';
-  // fetchData();
-}
 
 // ── Check Database Health ────────────────────────────────
 async function checkDBHealth() {
@@ -496,5 +528,6 @@ setInterval(fetchData, 3000);
 setInterval(updateESPStatus, 1000); // Update ESP status every second
 setInterval(updateDBStatus, 1000); // Update DB status every second
 setInterval(checkDBHealth, 5000);  // Check DB health every 5 seconds
-initTheme();  // Initialize theme on page load
+loadESPIp();      // Load ESP32 IP from localStorage
+initTheme();      // Initialize theme on page load
 fetchData();
