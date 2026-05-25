@@ -171,6 +171,7 @@ body {
 .row { display: grid; gap: 16px; margin-bottom: 16px; }
 .r5  { grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); }
 .r2  { grid-template-columns: 1.6fr 1fr; }
+.r3  { grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); }
 
 @media(max-width:860px){ .r2{ grid-template-columns:1fr; } }
 
@@ -796,6 +797,20 @@ footer {
 /* ── Enhanced Glow on Status Dots ── */
 .esp-status-dot, .db-status-dot {
   animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ── Stability Bar ── */
+.stab-bar-wrap {
+  height: 6px; border-radius: 999px;
+  background: var(--s3); overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.3);
+}
+
+.stab-bar {
+  height: 100%; border-radius: 999px;
+  background: var(--green);
+  box-shadow: 0 0 8px currentColor;
+  transition: width 0.5s ease;
 }
 
 /* ── Responsive Animations ── */

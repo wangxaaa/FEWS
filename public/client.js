@@ -357,6 +357,50 @@ async function fetchData() {
       document.getElementById('info_age').style.color = age > 30 ? 'var(--red)' : age > 15 ? 'var(--yellow)' : 'var(--green)';
     }
 
+    // ── Parameter Pengujian Baru ──────────────────────────
+    // [1] Akurasi
+    if (d.akurasi) {
+      document.getElementById('acc_pct').innerText = d.akurasi.persen?.toFixed(1) || '--';
+      document.getElementById('acc_pred_cat').innerText = d.akurasi.kategori_prediksi || '--';
+      document.getElementById('acc_actual_cat').innerText = d.akurasi.kategori_aktual || '--';
+      document.getElementById('acc_total').innerText = d.akurasi.total_prediksi || '0';
+      document.getElementById('acc_correct').innerText = d.akurasi.benar || '0';
+    }
+
+    // [2] Response Time
+    if (d.response_time) {
+      document.getElementById('resp_last').innerText = d.response_time.last_ms || '--';
+      document.getElementById('resp_avg').innerText = (d.response_time.avg_ms?.toFixed(1) || '--') + ' ms';
+      document.getElementById('resp_min').innerText = (d.response_time.min_ms || '--') + ' ms';
+      document.getElementById('resp_max').innerText = (d.response_time.max_ms || '--') + ' ms';
+      
+      // Set response time status based on avg time
+      let respStatus = 'Baik ✓';
+      if (d.response_time.avg_ms > 5000) respStatus = 'Lambat ⚠';
+      if (d.response_time.avg_ms > 8000) respStatus = 'Sangat Lambat ✗';
+      document.getElementById('resp_status').innerText = respStatus;
+      document.getElementById('resp_status').style.color = 
+        d.response_time.avg_ms > 8000 ? 'var(--red)' :
+        d.response_time.avg_ms > 5000 ? 'var(--yellow)' : 'var(--green)';
+    }
+
+    // [3] Stabilitas Data
+    if (d.stabilitas) {
+      document.getElementById('stab_water_cv').innerText = d.stabilitas.cv_air?.toFixed(1) || '--';
+      document.getElementById('stab_water_status').innerText = d.stabilitas.status_air || '--';
+      document.getElementById('stab_water_bar').style.width = Math.min(d.stabilitas.cv_air || 0, 100) + '%';
+      document.getElementById('stab_water_bar').style.background = 
+        d.stabilitas.cv_air < 10 ? '#2dce74' :
+        d.stabilitas.cv_air < 25 ? '#f0ad3f' : '#f25555';
+
+      document.getElementById('stab_rain_cv').innerText = d.stabilitas.cv_hujan?.toFixed(1) || '--';
+      document.getElementById('stab_rain_status').innerText = d.stabilitas.status_hujan || '--';
+      document.getElementById('stab_rain_bar').style.width = Math.min(d.stabilitas.cv_hujan || 0, 100) + '%';
+      document.getElementById('stab_rain_bar').style.background = 
+        d.stabilitas.cv_hujan < 10 ? '#2dce74' :
+        d.stabilitas.cv_hujan < 25 ? '#f0ad3f' : '#f25555';
+    }
+
     lastData = d;
 
     // Update ESP32 status indicator
@@ -391,6 +435,27 @@ async function fetchData() {
     document.getElementById('mi_water').innerText = '0 cm';
     document.getElementById('mi_rain').innerText  = '0 mm';
     setCorr(0, 0);
+    
+    // Reset parameter pengujian
+    document.getElementById('acc_pct').innerText = '--';
+    document.getElementById('acc_pred_cat').innerText = '--';
+    document.getElementById('acc_actual_cat').innerText = '--';
+    document.getElementById('acc_total').innerText = '0';
+    document.getElementById('acc_correct').innerText = '0';
+    
+    document.getElementById('resp_last').innerText = '--';
+    document.getElementById('resp_avg').innerText = '-- ms';
+    document.getElementById('resp_min').innerText = '-- ms';
+    document.getElementById('resp_max').innerText = '-- ms';
+    document.getElementById('resp_status').innerText = 'Offline';
+    document.getElementById('resp_status').style.color = 'var(--red)';
+    
+    document.getElementById('stab_water_cv').innerText = '--';
+    document.getElementById('stab_water_status').innerText = '--';
+    document.getElementById('stab_water_bar').style.width = '0%';
+    document.getElementById('stab_rain_cv').innerText = '--';
+    document.getElementById('stab_rain_status').innerText = '--';
+    document.getElementById('stab_rain_bar').style.width = '0%';
     
     // Clear lastData and update ESP status
     lastData = null;

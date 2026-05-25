@@ -38,6 +38,29 @@ export default async function handler(req, res) {
       server_time:    d.server_time,
       received_at:    d.received_at,
       data_age_sec:   ageSec,
+      
+      // Parameter Pengujian Baru
+      akurasi: {
+        persen:              d.akurasi_persen,
+        total_prediksi:      d.akurasi_total,
+        benar:               d.akurasi_benar,
+        kategori_prediksi:   d.akurasi_pred_cat,
+        kategori_aktual:     d.akurasi_aktual_cat,
+      },
+      response_time: {
+        last_ms:             d.resp_last_ms,
+        min_ms:              d.resp_min_ms,
+        max_ms:              d.resp_max_ms,
+        avg_ms:              d.resp_avg_ms,
+      },
+      stabilitas: {
+        cv_air:              d.stab_cv_air,
+        cv_hujan:            d.stab_cv_hujan,
+        stddev_air:          d.stab_stddev_air,
+        stddev_hujan:        d.stab_stddev_hujan,
+        status_air:          d.stab_status_air,
+        status_hujan:        d.stab_status_hujan,
+      },
     });
 
   } catch (err) {

@@ -163,7 +163,98 @@
     </div>
   </div>
 
-  <!-- Row 3: Chart (full width) -->
+  <!-- Row 3: Parameter Pengujian (Testing Parameters) -->
+  <div style="margin-top: 20px;">
+    <div style="font-size: 12px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; padding: 0 8px;">📊 Parameter Pengujian Sistem</div>
+    
+    <div class="row r3">
+      <!-- Card 1: Akurasi -->
+      <div class="card" style="--stripe:var(--green)">
+        <div class="c-label">🎯 Akurasi Prediksi</div>
+        <div class="c-val"><span id="acc_pct">--</span><span class="c-unit">%</span></div>
+        <div class="info-grid" style="font-size: 12px; margin-top: 12px;">
+          <div class="ig-item">
+            <div class="ig-k">Prediksi Fuzzy</div>
+            <div class="ig-v" id="acc_pred_cat" style="font-size:11px">--</div>
+          </div>
+          <div class="ig-item">
+            <div class="ig-k">Kondisi Aktual</div>
+            <div class="ig-v" id="acc_actual_cat" style="font-size:11px">--</div>
+          </div>
+          <div class="ig-item">
+            <div class="ig-k">Total Prediksi</div>
+            <div class="ig-v" id="acc_total" style="font-size:11px">0</div>
+          </div>
+          <div class="ig-item">
+            <div class="ig-k">Benar</div>
+            <div class="ig-v" id="acc_correct" style="font-size:11px">0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2: Response Time -->
+      <div class="card" style="--stripe:var(--green)">
+        <div class="c-label">⏱️ Response Time</div>
+        <div class="c-val"><span id="resp_last">--</span><span class="c-unit">ms</span></div>
+        <div class="info-grid" style="font-size: 12px; margin-top: 12px;">
+          <div class="ig-item">
+            <div class="ig-k">Rata-rata</div>
+            <div class="ig-v" id="resp_avg" style="font-size:11px">-- ms</div>
+          </div>
+          <div class="ig-item">
+            <div class="ig-k">Min</div>
+            <div class="ig-v" id="resp_min" style="font-size:11px">-- ms</div>
+          </div>
+          <div class="ig-item">
+            <div class="ig-k">Max</div>
+            <div class="ig-v" id="resp_max" style="font-size:11px">-- ms</div>
+          </div>
+          <div class="ig-item">
+            <div class="ig-k">Status</div>
+            <div class="ig-v" id="resp_status" style="font-size:11px">Baik ✓</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3: Stabilitas Data -->
+      <div class="card" style="--stripe:var(--green)">
+        <div class="c-label">📈 Stabilitas Data</div>
+        <div style="margin-top: 8px;">
+          <div style="margin-bottom: 10px;">
+            <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">Tinggi Air</div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="flex: 1;">
+                <div class="stab-bar-wrap">
+                  <div class="stab-bar" id="stab_water_bar" style="width: 0%; background: #2dce74;"></div>
+                </div>
+              </div>
+              <div style="font-size: 11px; min-width: 50px; text-align: right;">
+                <span id="stab_water_cv">--</span>%
+              </div>
+            </div>
+            <div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;" id="stab_water_status">--</div>
+          </div>
+          
+          <div>
+            <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">Curah Hujan</div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="flex: 1;">
+                <div class="stab-bar-wrap">
+                  <div class="stab-bar" id="stab_rain_bar" style="width: 0%; background: #4f8ef7;"></div>
+                </div>
+              </div>
+              <div style="font-size: 11px; min-width: 50px; text-align: right;">
+                <span id="stab_rain_cv">--</span>%
+              </div>
+            </div>
+            <div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;" id="stab_rain_status">--</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 4: Chart (full width) -->
   <div class="chart-card">
     <div class="chart-hdr">
       <span class="chart-ttl">Histori: Curah Hujan & Tinggi Air</span>
