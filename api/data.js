@@ -1,21 +1,36 @@
 // api/data.js
-// POST /api/data  ←  ESP32 kirim data sensor setiap 10 detik
+// POST /api/data  ←  ESP32 kirim data sensor ke Vercel Cloud
 
 import { sbSelect, sbInsert, pearson } from './_supabase.js';
 
-const API_KEY = process.env.API_KEY || 'fews-secret-key';
+const API_KEY = process.env.API_KEY || 'fews2026';  // Match dengan ESP32
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST')   return res.status(405).json({ error: 'Method not allowed' });
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed. Use POST.' });
+  }
 
   // ── Validasi API Key ─────────────────────────────────────
-  const key = req.headers['x-api-key'] || req.query.key;
+  const key = req.headers['x-api-key'];
+  if (!key) {
+    return res.status(401).json({ 
+      error: 'Missing x-api-key header',
+      expected_key: 'fews2026' 
+    });
+  }
+  
   if (key !== API_KEY) {
-    return res.status(401).json({ error: 'Unauthorized — API key salah' });
+    return res.status(401).json({ 
+      error: `Unauthorized — API key mismatch. Got: ${key}, Expected: ${API_KEY}` 
+    });
   }
 
   const d = req.body;
@@ -23,8 +38,11 @@ export default async function handler(req, res) {
   // ── Validasi field wajib ─────────────────────────────────
   const required = ['curah_hujan', 'tinggi_air', 'suhu', 'kelembaban', 'kecepatan_angin', 'output'];
   for (const f of required) {
-    if (d[f] === undefined) {
-      return res.status(400).json({ error: `Field '${f}' wajib ada` });
+    if (d[f] === undefined || d[f] === null) {
+      return res.status(400).json({ 
+        error: `Missing required field: '${f}'`,
+        received: d 
+      });
     }
   }
 
