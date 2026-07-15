@@ -191,6 +191,11 @@ function setStatus(pct) {
   hc.style.setProperty('--hcolor', c);
   hc.style.setProperty('--hglow',  g);
   hc.style.setProperty('--hglow2', g);
+  // set semantic class for styling variants
+  hc.classList.remove('siaga','bahaya','aman');
+  if (label.includes('SIAGA')) hc.classList.add('siaga');
+  else if (label.includes('BAHAYA')) hc.classList.add('bahaya');
+  else hc.classList.add('aman');
   pEl.style.color      = c;
   pg.style.background  = c;
   pg.style.boxShadow   = `0 0 10px ${g}`;
@@ -524,10 +529,10 @@ async function checkDBHealth() {
   }
 }
 
-setInterval(fetchData, 3000);
-setInterval(updateESPStatus, 1000); // Update ESP status every second
-setInterval(updateDBStatus, 1000); // Update DB status every second
-setInterval(checkDBHealth, 5000);  // Check DB health every 5 seconds
+setInterval(fetchData, 5000);                       // Fetch every 5 sec (optimized)
+setInterval(updateESPStatus, 2000);                // Update ESP status every 2 sec
+setInterval(updateDBStatus, 2000);                 // Update DB status every 2 sec
+setInterval(checkDBHealth, 10000);                 // Check DB health every 10 sec
 loadESPIp();      // Load ESP32 IP from localStorage
 initTheme();      // Initialize theme on page load
 fetchData();

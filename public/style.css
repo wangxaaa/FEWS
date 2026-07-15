@@ -15,7 +15,7 @@
   --text-muted: #b0b0c0;
   --text-dim:   #787888;
 
-  /* Supabase green - primary color */
+  /* Supabase green -   primary color */
   --green:      #3ecf8e;
   --green-dim:  rgba(62,207,142,.08);
   --green-glow: rgba(62,207,142,.15);
@@ -419,6 +419,24 @@ body {
 .badge:hover {
   box-shadow: 0 2px 8px rgba(62,207,142,.15);
 }
+
+/* Alternate hero appearance inspired by 'status siaga' style */
+.hero.alt {
+  border-radius: 20px;
+  padding: 32px;
+  background: linear-gradient(180deg, rgba(8,11,17,0.9), rgba(20,32,48,0.9));
+  border: 1px solid rgba(30,51,80,0.6);
+  box-shadow: 0 10px 30px rgba(16,40,61,0.35), inset 0 -6px 30px rgba(47,184,114,0.02);
+}
+.hero.alt .hero-label { color: var(--text-dim); }
+.hero.alt .hero-glow { background: linear-gradient(120deg, var(--hglow, rgba(240,173,63,0.12)), transparent 55%); opacity: .22; }
+.hero.alt .hero-pct { font-size: 72px; color: var(--hcolor, #2dce74); text-shadow: 0 6px 30px rgba(0,0,0,.6); }
+.hero.alt .badge { border: 1px solid rgba(255,255,255,0.03); box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+
+/* When status is SIAGA, give a warmer amber accent */
+.hero.siaga { --hcolor: #f0ad3f; --hglow: rgba(240,173,63,0.18); border-color: rgba(240,173,63,0.18); box-shadow: 0 10px 34px rgba(240,173,63,0.06); }
+.hero.bahaya { --hcolor: #f25555; --hglow: rgba(242,85,85,0.18); border-color: rgba(242,85,85,0.18); }
+.hero.aman   { --hcolor: #2dce74; --hglow: rgba(45,206,116,0.12); border-color: rgba(45,206,116,0.12); }
 
 .badge-dot { 
   width: 8px; height: 8px; border-radius: 50%; 
