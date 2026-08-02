@@ -1,75 +1,73 @@
-// api/data.js
-// POST /api/data  ←  ESP32 kirim data sensor ke Vercel Cloud
+// ============================================================
+// POST /api/data
+// Dipanggil oleh ESP32 (node fuzzy) setiap ~2.5 detik.
+// - Menyimpan 1 baris data mentah + hasil klasifikasi ke Supabase
+// - Membalas dengan status gate saat ini (menggantikan MQTT
+//   topic gate/cmd yang dulu di-subscribe ESP32)
+// ============================================================
 
-import { sbSelect, sbInsert, pearson } from './_supabase.js';
+const { supabaseFetch } = require("./_supabase");
 
-const API_KEY = process.env.API_KEY || 'fews2026';  // Match dengan ESP32
+const API_KEY = process.env.API_KEY;
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
-  
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed. Use POST.' });
+module.exports = async (req, res) => {
+  if (req.method !== "POST") {
+    res.status(405).json({ status: "error", message: "Method not allowed" });
+    return;
   }
 
-  // ── Validasi API Key ─────────────────────────────────────
-  const key = req.headers['x-api-key'];
-  if (key !== API_KEY) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  const key = req.headers["x-api-key"];
+  if (!API_KEY || key !== API_KEY) {
+    res.status(401).json({ status: "error", message: "Unauthorized" });
+    return;
   }
 
-  const d = req.body;
+  const body = req.body || {};
 
-  // ── Validasi field wajib ─────────────────────────────────
-  const required = ['curah_hujan', 'tinggi_air', 'suhu', 'kelembaban', 'kecepatan_angin', 'output'];
-  for (const f of required) {
-    if (d[f] === undefined || d[f] === null) {
-      return res.status(400).json({ error: `Missing field: ${f}` });
-    }
-  }
+  const row = {
+    suhu: numOrNull(body.suhu),
+    kelembaban: numOrNull(body.kelembaban),
+    curah_hujan: numOrNull(body.curah_hujan),
+    kecepatan_angin: numOrNull(body.kecepatan_angin),
+    tinggi_air: numOrNull(body.tinggi_air),
+    fuzzy_output: numOrNull(body.fuzzy_output),
+    status_fuzzy: body.status_fuzzy ?? body.status ?? null,
+    status_decision_tree: body.status_decision_tree ?? body.ground_truth ?? null,
+    gate_position: intOrNull(body.gate_position),
+    gate_mode: body.gate_mode ?? null,
+    device_timestamp: intOrNull(body.timestamp),
+  };
 
   try {
-    const now = new Date();
+    // 1. Simpan data sensor
+    await supabaseFetch("/sensor_data", {
+      method: "POST",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify(row),
+    });
 
-    // ── Hitung Pearson di server jika tidak dikirim ESP32 ───
-    let korStr   = d.korelasi_r;
-    let sampleCt = d.sample_count || 1;
+    // 2. Ambil status gate saat ini untuk dikirim balik ke ESP32
+    const gateRows = await supabaseFetch(
+      "/gate_state?id=eq.1&select=mode,position"
+    );
+    const gate = (gateRows && gateRows[0]) || { mode: "AUTO", position: 0 };
 
-    if (korStr === undefined) {
-      // Ambil 20 data terakhir untuk Pearson
-      const hist = await sbSelect('sensor_data', 'select=curah_hujan,tinggi_air&order=received_at.desc&limit=20');
-      const xs   = hist.map(h => h.curah_hujan).concat(d.curah_hujan);
-      const ys   = hist.map(h => h.tinggi_air ).concat(d.tinggi_air);
-      korStr   = pearson(xs, ys);
-      sampleCt = xs.length;
-    }
-
-    // ── Simpan ke Supabase ───────────────────────────────────
-    const row = {
-      received_at:     now.toISOString(),
-      server_time:     now.toLocaleString('id-ID', { hour12: false }),
-      curah_hujan:     parseFloat(d.curah_hujan),
-      tinggi_air:      parseFloat(d.tinggi_air),
-      suhu:            parseFloat(d.suhu),
-      kelembaban:      parseFloat(d.kelembaban),
-      kecepatan_angin: parseFloat(d.kecepatan_angin),
-      output:          parseFloat(d.output),
-      korelasi_r:      parseFloat(korStr),
-      sample_count:    parseInt(sampleCt),
-      uptime:          d.uptime || '00:00:00'
-    };
-
-    await sbInsert('sensor_data', row);
-    return res.status(200).json({ ok: true });
-
+    res.status(200).json({
+      status: "ok",
+      gate_mode: gate.mode,
+      gate_position: gate.position,
+    });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Server error: ' + err.message });
+    res.status(500).json({ status: "error", message: err.message });
   }
+};
+
+function numOrNull(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function intOrNull(v) {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? n : null;
 }

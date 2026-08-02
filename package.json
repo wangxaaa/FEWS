@@ -1,9 +1,9 @@
 {
-  "name": "fews-supabase",
-  "version": "1.0.0",
-  "description": "FEWS — Flood Early Warning System (Vercel + Supabase)",
-  "type": "module",
+  "name": "fews-vercel-supabase",
+  "version": "2.0.0",
+  "private": true,
+  "description": "FEWS - Flood Early Warning System (Vercel + Supabase, tanpa MQTT)",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18"
   }
 }

@@ -1,153 +1,112 @@
-# 🌊 FEWS — Vercel + Supabase
+# 🌊 FEWS — Migrasi MQTT → Vercel + Supabase
 
-## Struktur File
-```
-fews-supabase/
-├── api/
-│   ├── _supabase.js   ← Helper Supabase (fetch wrapper + Pearson)
-│   ├── index.js       ← GET  /api          (dashboard ambil data terbaru)
-│   ├── data.js        ← POST /api/data     (ESP32 kirim data)
-│   └── history.js     ← GET  /api/history  (50 data terakhir)
-├── public/
-│   └── index.html     ← Dashboard Web
-├── vercel.json
-├── package.json
-├── supabase_schema.sql ← SQL untuk buat tabel di Supabase
-├── fews_esp32.ino
-└── .gitignore
-```
+## Apa yang berubah
+
+| Sebelum (MQTT) | Sesudah (Vercel + Supabase) |
+|---|---|
+| Node fuzzy publish ke HiveMQ broker | Node fuzzy `POST` ke `/api/data` di Vercel |
+| Dashboard subscribe topic MQTT | Dashboard subscribe **Supabase Realtime** (`postgres_changes`) |
+| Gate command via MQTT topic `gate/cmd` | Gate command via tabel `gate_state`, dibaca lewat response `/api/data` & `/api/gate` |
+| Data tidak tersimpan permanen | Semua data mentah + hasil Fuzzy & Decision Tree tersimpan di tabel `sensor_data` |
+
+**Node master pengirim (sensor) TIDAK BERUBAH** — dia tetap kirim data lokal ke node fuzzy lewat HTTP `192.168.4.1/data` seperti sebelumnya. Yang berubah hanya node fuzzy (`esp32_penerima_fuzzy_CLOUD.ino`).
 
 ---
 
-## 🔁 Alur Sistem
+## Langkah 1 — Cek/siapkan tabel di Supabase (project lama)
+
+1. Buka project Supabase kamu yang lama → **SQL Editor** → **New query**
+2. Paste isi `supabase_schema.sql` → **Run**
+   - Ini akan membuat tabel `sensor_data` (jika belum ada) dan `gate_state`
+   - Aman dijalankan ulang — pakai `if not exists` dan `on conflict do nothing`
+3. Buka **Project Settings → API**, catat dua nilai:
+   - `Project URL` → contoh `https://xxxxxxxxxxxx.supabase.co`
+   - `anon public` key
+
+⚠️ **Penting soal PGRST204** (error yang pernah kamu alami dulu): untuk **server-side** (Vercel API), `SUPABASE_URL` di environment variable **harus** ditambah suffix `/rest/v1`:
 ```
-Sensor → ESP32 → POST /api/data → Vercel Function → Supabase (PostgreSQL)
-                                                           ↑
-Dashboard Web ← GET /api ← Vercel Function ────────────────┘
+https://xxxxxxxxxxxx.supabase.co/rest/v1
 ```
+Untuk **client-side** (dashboard, di `public/client.js`), pakai URL project **tanpa** `/rest/v1`.
 
 ---
 
-## 🚀 Langkah 1 — Buat Project Supabase
+## Langkah 2 — Deploy ke Vercel
 
-1. Buka https://supabase.com → **Start your project** (gratis)
-2. **New Project** → isi nama: `fews-db`, password database (catat!), region: **Southeast Asia (Singapore)**
-3. Tunggu ~2 menit sampai project siap
-4. Buka menu **SQL Editor** → klik **New query** → paste isi file `supabase_schema.sql` → klik **Run**
-5. Tabel `sensor_data` akan terbuat
-6. Buka **Project Settings → API**, salin dua nilai:
-   ```
-   Project URL  : https://xxxxxxxxxxxx.supabase.co
-   anon public  : eyJhbGci...  (panjang, ini API key publik)
-   ```
-
----
-
-## 🚀 Langkah 2 — Upload ke GitHub
-
-1. Buat repo baru di https://github.com/new → nama: `fews-vercel`
-2. Upload semua file ini **kecuali** `fews_esp32.ino`:
-   ```
-   api/_supabase.js
-   api/index.js
-   api/data.js
-   api/history.js
-   public/index.html
-   vercel.json
-   package.json
-   .gitignore
-   ```
-
----
-
-## 🚀 Langkah 3 — Deploy di Vercel
-
-1. Buka https://vercel.com → Login dengan GitHub
-2. **Add New → Project** → pilih repo `fews-vercel` → **Import**
-3. Sebelum klik Deploy, buka bagian **Environment Variables** dan tambahkan:
+1. Push folder ini (`api/`, `public/`, `vercel.json`, `package.json`, `supabase_schema.sql`) ke repo GitHub kamu (`wangxaaa/FEWS` atau repo baru)
+2. Di Vercel → **Add New → Project** → import repo tersebut
+3. Sebelum Deploy, buka **Environment Variables**, tambahkan:
 
    | Name | Value |
-   |------|-------|
-   | `SUPABASE_URL`      | `https://xxxxxxxxxxxx.supabase.co` |
+   |---|---|
+   | `SUPABASE_URL` | `https://xxxxxxxxxxxx.supabase.co/rest/v1` |
    | `SUPABASE_ANON_KEY` | `eyJhbGci...` (anon public key) |
-   | `API_KEY`           | buat sendiri, misal: `fews2026xyz` |
+   | `API_KEY` | bebas, contoh `fews2026xyz` — harus sama dengan yang ditulis di firmware |
 
-4. Klik **Deploy** → tunggu ~1 menit
-5. Vercel beri URL: `https://fews-vercel.vercel.app`
+4. **Deploy**. Vercel akan beri URL, misal `https://fews-vercel.vercel.app`
 
 ---
 
-## 🚀 Langkah 4 — Konfigurasi ESP32
+## Langkah 3 — Isi kredensial di dashboard
 
-Edit 4 baris pertama di `fews_esp32.ino`:
+Edit `public/client.js`, baris paling atas:
+
+```js
+const SUPABASE_URL = "https://xxxxxxxxxxxx.supabase.co"; // TANPA /rest/v1
+const SUPABASE_ANON_KEY = "eyJhbGci...";
+```
+
+Commit & push — Vercel auto-redeploy.
+
+---
+
+## Langkah 4 — Konfigurasi firmware ESP32 (hanya node fuzzy)
+
+Edit `esp32/esp32_penerima_fuzzy_CLOUD.ino`:
 
 ```cpp
-const char* WIFI_SSID  = "NAMA_WIFI_KAMU";
-const char* WIFI_PASS  = "PASSWORD_WIFI";
-const char* SERVER_URL = "https://fews-vercel.vercel.app/api/data";
-const char* API_KEY    = "fews2026xyz";  // ← HARUS SAMA dengan di Vercel
+const char* CLOUD_DATA_URL = "https://fews-vercel.vercel.app/api/data";
+const char* CLOUD_API_KEY  = "fews2026xyz";   // HARUS SAMA dengan API_KEY di Vercel
 ```
 
-Upload ke ESP32, buka **Serial Monitor** (baud 115200):
-```
-✓ WiFi Connected: 192.168.x.x
-Rain:12.5 mm | Water:95.3 cm | Temp:28.1°C | ... | Out:55.0%
-✓ Data terkirim ke server
-```
+Library Arduino yang dibutuhkan (beberapa sudah kamu pakai sebelumnya, `PubSubClient` sudah **tidak dipakai lagi** dan boleh di-uninstall kalau mau):
+- ArduinoJson
+- Fuzzy (eFLL)
+- ESP32Servo
 
-Buka dashboard di browser: `https://fews-vercel.vercel.app`
+Upload ke ESP32 node fuzzy. Node master pengirim (`esp32_master_pengirim.ino`) **upload ulang seperti biasa, tanpa perubahan apa pun**.
 
 ---
 
-## 🔌 Wiring Sensor
+## Langkah 5 — Cek
 
-| Sensor       | Pin ESP32 | Catatan              |
-|--------------|-----------|----------------------|
-| DHT22 DATA   | GPIO 4    | Suhu & Kelembaban    |
-| HC-SR04 TRIG | GPIO 5    | Tinggi air (trigger) |
-| HC-SR04 ECHO | GPIO 18   | Tinggi air (echo)    |
-| Rain sensor  | GPIO 34   | Analog ADC1          |
-| Anemometer   | GPIO 35   | Analog ADC1          |
-
-Library Arduino (install via Library Manager):
-- **ArduinoJson** by Benoit Blanchon (v6.x)
-- **DHT sensor library** by Adafruit
+1. Buka Serial Monitor node fuzzy (115200 baud) → pastikan tidak ada error HTTP saat `TaskCloudSync` jalan
+2. Buka dashboard `https://fews-vercel.vercel.app`
+3. Indikator "Terhubung (Realtime)" di kanan atas harus hijau
+4. Data sensor & grafik harus update tiap ±2.5 detik
+5. Coba override gate manual dari dashboard → cek node fuzzy merespons
 
 ---
 
-## 📊 API Endpoints
+## Endpoint API
 
-| Method | Endpoint       | Header wajib  | Keterangan                    |
-|--------|----------------|---------------|-------------------------------|
-| GET    | `/`            | –             | Dashboard web                 |
-| GET    | `/api`         | –             | Data sensor terbaru           |
-| POST   | `/api/data`    | `x-api-key`   | ESP32 kirim data              |
-| GET    | `/api/history` | –             | 50 data terakhir (JSON)       |
-
----
-
-## ✅ Batas Gratis Supabase
-
-| Item | Batas Gratis |
-|------|-------------|
-| Database | 500 MB |
-| Row reads/bulan | 5 juta |
-| Row inserts/bulan | 50 ribu |
-
-Dengan kirim 1 data per 10 detik → **~8.640 insert/hari** → dalam sebulan ~260 ribu insert → **masih di bawah 50 ribu?**
-
-⚠️ **Perhatian:** 50 ribu insert/bulan di tier gratis berarti ~1.6 insert/menit. Jika interval ESP32 10 detik (6/menit), dalam sebulan = **~259.200 insert** → melebihi batas gratis.
-
-**Solusi:** Naikkan interval ESP32 ke **60 detik** (1 insert/menit → ~43.200/bulan ✓ aman) atau gunakan paket Supabase Pro ($25/bln) untuk data lebih sering.
+| Method | Endpoint | Header wajib | Keterangan |
+|---|---|---|---|
+| POST | `/api/data` | `x-api-key` | ESP32 kirim data, balasan berisi status gate |
+| GET | `/api/latest` | – | Data sensor terbaru (load awal dashboard) |
+| GET | `/api/history?limit=50` | – | N data terakhir (isi grafik saat dashboard dibuka) |
+| GET | `/api/gate` | – | Baca status gate saat ini |
+| POST | `/api/gate` | – | Dashboard set override manual / kembali AUTO |
 
 ---
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 | Masalah | Solusi |
-|---------|--------|
-| Dashboard "Belum ada data" | Cek ESP32 menyala & WiFi konek. Lihat Serial Monitor |
-| HTTP 401 dari ESP32 | API_KEY ESP32 ≠ environment variable Vercel |
-| HTTP 500 | Cek SUPABASE_URL & SUPABASE_ANON_KEY sudah benar |
-| Tabel tidak ditemukan | Jalankan `supabase_schema.sql` di Supabase SQL Editor |
-| Data age merah di dashboard | ESP32 tidak mengirim — cek koneksi internet ESP32 |
+|---|---|
+| Dashboard "Gagal terhubung ke Supabase" | Cek `SUPABASE_URL`/`SUPABASE_ANON_KEY` di `client.js` benar & tanpa `/rest/v1` |
+| HTTP 401 dari ESP32 | `CLOUD_API_KEY` di firmware ≠ `API_KEY` di Vercel env |
+| HTTP 500 di Vercel | Cek `SUPABASE_URL` (server) sudah pakai suffix `/rest/v1`, dan `SUPABASE_ANON_KEY` benar |
+| Tabel tidak ditemukan | Jalankan ulang `supabase_schema.sql` |
+| Grafik kosong saat dashboard dibuka | Cek endpoint `/api/history` mengembalikan data (buka langsung di browser) |
+| Gate tidak merespons override | Cek tabel `gate_state` ter-update di Supabase Table Editor saat toggle override |

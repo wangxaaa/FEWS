@@ -1,6 +1,5 @@
 // ============================================================
-// GET /api/history?limit=50 -> N data terakhir (urut lama -> baru)
-// Dipakai dashboard untuk mengisi grafik saat pertama kali dibuka
+// GET /api/latest -> 1 baris data sensor terbaru
 // ============================================================
 
 const { supabaseFetch } = require("./_supabase");
@@ -10,14 +9,11 @@ module.exports = async (req, res) => {
     res.status(405).json({ status: "error", message: "Method not allowed" });
     return;
   }
-  const limitRaw = parseInt((req.query && req.query.limit) || "50", 10);
-  const limit = Math.min(200, Math.max(1, Number.isFinite(limitRaw) ? limitRaw : 50));
-
   try {
     const rows = await supabaseFetch(
-      `/sensor_data?select=*&order=created_at.desc&limit=${limit}`
+      "/sensor_data?select=*&order=created_at.desc&limit=1"
     );
-    res.status(200).json((rows || []).reverse());
+    res.status(200).json((rows && rows[0]) || null);
   } catch (err) {
     res.status(500).json({ status: "error", message: err.message });
   }

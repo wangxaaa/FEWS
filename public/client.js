@@ -1,22 +1,151 @@
-// public/client.js - Frontend FEWS Dashboard
+// ============ FEWS Dashboard - Vercel + Supabase Realtime ============
+// Menggantikan versi MQTT: data masuk lewat Supabase Realtime
+// (postgres_changes pada tabel sensor_data), gate control lewat
+// REST API Vercel (/api/gate).
 
-let ESP_IP = window.location.origin;
+// >>> ISI SESUAI PROJECT SUPABASE KAMU <<<
+const SUPABASE_URL = "https://xxxxxxxxxxxx.supabase.co"; // tanpa /rest/v1 di sisi client
+const SUPABASE_ANON_KEY = "eyJhbGci..."; // anon public key (aman ditaruh di client)
+
+const API_BASE = ""; // kosongkan jika client.js satu domain dengan Vercel API (default)
 const MAX_HIST = 50;
-let histTime=[], histRain=[], histWater=[], histOut=[];
 
-// ── Load ESP32 IP from localStorage ────────────────────────────
-const ESP_IP_KEY = 'fews_esp_ip';
+let messageCount = 0;
+let csvRows = [];
+let csvCountdown = 10;
+let histTime = [], histRain = [], histWater = [], histOut = [], histTemp = [], histHumidity = [], histWind = [];
+let lastData = null;
+let espLastData = null;
+let dbLastCheck = null;
 
-function loadESPIp() {
-  const saved = localStorage.getItem(ESP_IP_KEY);
-  if (saved) {
-    ESP_IP = saved;
-    document.getElementById('espIp').value = saved;
+let lastRainValue = null;
+let lastRainIncreaseTs = null;
+
+const ESP_STALE_THRESHOLD = 30000;
+const DB_STALE_THRESHOLD = 30000;
+
+let espStatus = 'offline';
+let dbStatus = 'offline';
+
+let gateStatus = 'closed';
+let gateMode = 'automatic';
+let gateOverride = false;
+let gatePosition = 0;
+let currentFuzzyOutput = 0;
+
+const CSV_KEY = 'fews_csv_log';
+const THEME_KEY = 'fews_theme_mode';
+
+const connDot = document.getElementById("connDot");
+const connText = document.getElementById("connText");
+
+// ============ Supabase client & Realtime ============
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const channel = supabase
+  .channel("sensor_data_changes")
+  .on(
+    "postgres_changes",
+    { event: "INSERT", schema: "public", table: "sensor_data" },
+    (payload) => {
+      dbLastCheck = Date.now();
+      updateDBStatus();
+      handleIncomingRow(payload.new);
+    }
+  )
+  .subscribe((status) => {
+    if (status === "SUBSCRIBED") {
+      connDot.classList.add("live");
+      connText.textContent = "Terhubung (Realtime)";
+    } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+      connDot.classList.remove("live");
+      connText.textContent = "Gagal terhubung ke Supabase";
+    } else if (status === "CLOSED") {
+      connDot.classList.remove("live");
+      connText.textContent = "Terputus dari Supabase";
+    }
+  });
+
+function handleIncomingRow(row) {
+  const norm = normalizeRow(row);
+  updateDashboard(norm);
+  messageCount++;
+  document.getElementById("metaCount").textContent = messageCount;
+  document.getElementById("metaTime").textContent = new Date().toLocaleTimeString("id-ID");
+
+  espLastData = Date.now();
+  updateESPStatus();
+  lastData = norm;
+
+  const rainVal = Number(norm.curah_hujan);
+  if (!Number.isNaN(rainVal)) {
+    if (lastRainValue === null || rainVal > lastRainValue) {
+      lastRainIncreaseTs = Date.now();
+    }
+    lastRainValue = rainVal;
+  }
+
+  if (!gateOverride && norm.gate_position !== undefined && norm.gate_position !== null) {
+    let currentGateStatus = 'closed';
+    if (norm.gate_position >= 90) currentGateStatus = 'open';
+    else if (norm.gate_position >= 40) currentGateStatus = 'half';
+    updateGateStatus(currentGateStatus, norm.gate_position, (norm.gate_mode || 'AUTO').toLowerCase() === 'manual' ? 'manual' : 'automatic');
   }
 }
 
-// ── Theme Mode (Light/Dark) ────────────────────────────
-const THEME_KEY = 'fews_theme_mode';
+// Ubah nama kolom Supabase (snake_case, sudah sesuai) jadi field yang dipakai UI,
+// dan terapkan skala tampilan tinggi air (x10) seperti versi MQTT sebelumnya.
+function normalizeRow(row) {
+  const dst = Object.assign({}, row);
+  dst.output = row.fuzzy_output;
+  dst.status = row.status_fuzzy || "AMAN";
+  dst.status_dt = row.status_decision_tree || "AMAN";
+  if (dst.tinggi_air != null) {
+    dst.tinggi_air = dst.tinggi_air * 10;
+  }
+  return dst;
+}
+
+// ============ Load awal: data terakhir + histori grafik ============
+async function loadInitialData() {
+  try {
+    const [latestRes, histRes] = await Promise.all([
+      fetch(`${API_BASE}/api/latest`).then(r => r.json()).catch(() => null),
+      fetch(`${API_BASE}/api/history?limit=${MAX_HIST}`).then(r => r.json()).catch(() => []),
+    ]);
+
+    if (Array.isArray(histRes) && histRes.length) {
+      histRes.forEach((row) => {
+        const norm = normalizeRow(row);
+        const t = new Date(row.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        pushHistory(t, norm);
+      });
+      redrawCharts();
+    }
+
+    if (latestRes) {
+      dbLastCheck = Date.now();
+      updateDBStatus();
+      const norm = normalizeRow(latestRes);
+      updateDashboard(norm);
+      lastData = norm;
+      espLastData = Date.now();
+      updateESPStatus();
+    }
+  } catch (e) {
+    console.error("Gagal load data awal:", e);
+  }
+}
+
+function firstNumericField(obj, keys) {
+  for (const k of keys) {
+    if (obj[k] != null && obj[k] !== "") {
+      const n = Number(obj[k]);
+      if (!Number.isNaN(n)) return n;
+    }
+  }
+  return null;
+}
 
 function initTheme() {
   const saved = localStorage.getItem(THEME_KEY) || 'dark';
@@ -41,250 +170,186 @@ function toggleTheme() {
   setTheme(next);
 }
 
-// ── ESP32 Status Tracking ───────────────────────────────
-let espLastData = null;
-let espStatus = 'offline'; // 'online' | 'offline' | 'stale'
-const ESP_ONLINE_THRESHOLD = 10000; // 10 detik
-const ESP_STALE_THRESHOLD  = 30000; // 30 detik
-
 function updateESPStatus() {
-  if (!espLastData) {
-    setESPStatus('offline');
-    return;
-  }
-  
+  if (!espLastData) { setESPStatus('offline'); return; }
   const now = Date.now();
   const age = now - espLastData;
-  
-  if (age < ESP_STALE_THRESHOLD) {
-    setESPStatus('online', age);
-  } else {
-    setESPStatus('offline', age);
-  }
+  if (age < ESP_STALE_THRESHOLD) setESPStatus('online', age);
+  else setESPStatus('offline', age);
 }
 
 function setESPStatus(status, ageMs = 0) {
-  if (espStatus === status && status !== 'online') return; // no need to update
+  if (espStatus === status && status !== 'online') return;
   espStatus = status;
-  
-  const dot   = document.getElementById('esp_status_dot');
-  const text  = document.getElementById('esp_status_text');
-  const seen  = document.getElementById('esp_last_seen');
-  
-  let color, anim, label;
-  
-  if (status === 'online') {
-    color = '#2dce74';
-    anim  = 'none';
-    label = '✓ ESP32: Online';
-  } else {
-    color = '#f25555';
-    anim  = 'none';
-    label = '✗ ESP32: Offline';
-  }
-  
-  dot.style.setProperty('--esp-color', color);
-  dot.style.animation = anim;
-  text.innerText = label;
-  
-  if (ageMs > 0) {
-    const secs = Math.floor(ageMs / 1000);
-    seen.innerText = `(${secs}s ago)`;
-  }
+  const dot = document.getElementById('esp_status_dot'), text = document.getElementById('esp_status_text'), seen = document.getElementById('esp_last_seen');
+  let color = status === 'online' ? '#2dce74' : '#f25555';
+  let label = status === 'online' ? '✓ ESP32: Online' : '✗ ESP32: Offline';
+  dot.style.setProperty('--esp-color', color); text.innerText = label;
+  if (ageMs > 0) seen.innerText = `(${Math.floor(ageMs / 1000)}s ago)`;
 }
 
-// ── Database Status Tracking ────────────────────────────
-let dbLastCheck = null;
-let dbStatus = 'offline'; // 'online' | 'offline' | 'stale'
-const DB_ONLINE_THRESHOLD = 10000; // 10 detik
-const DB_STALE_THRESHOLD  = 30000; // 30 detik
-
 function updateDBStatus() {
-  if (!dbLastCheck) {
-    setDBStatus('offline');
-    return;
-  }
-  
+  if (!dbLastCheck) { setDBStatus('offline'); return; }
   const now = Date.now();
   const age = now - dbLastCheck;
-  
-  if (age < DB_STALE_THRESHOLD) {
-    setDBStatus('online', age);
-  } else {
-    setDBStatus('offline', age);
-  }
+  if (age < DB_STALE_THRESHOLD) setDBStatus('online', age);
+  else setDBStatus('offline', age);
 }
 
 function setDBStatus(status, ageMs = 0) {
-  if (dbStatus === status && status !== 'online') return; // no need to update
+  if (dbStatus === status && status !== 'online') return;
   dbStatus = status;
-  
-  const dot   = document.getElementById('db_status_dot');
-  const text  = document.getElementById('db_status_text');
-  const seen  = document.getElementById('db_last_seen');
-  
-  let color, anim, label;
-  
-  if (status === 'online') {
-    color = '#2dce74';
-    anim  = 'none';
-    label = '✓ Database: Online';
-  } else {
-    color = '#f25555';
-    anim  = 'none';
-    label = '✗ Database: Offline';
-  }
-  
-  dot.style.setProperty('--db-color', color);
-  dot.style.animation = anim;
-  text.innerText = label;
-  
-  if (ageMs > 0) {
-    const secs = Math.floor(ageMs / 1000);
-    seen.innerText = `(${secs}s ago)`;
-  }
+  const dot = document.getElementById('db_status_dot'), text = document.getElementById('db_status_text'), seen = document.getElementById('db_last_seen');
+  let color = status === 'online' ? '#2dce74' : '#f25555';
+  let label = status === 'online' ? '✓ Database: Online' : '✗ Database: Offline';
+  dot.style.setProperty('--db-color', color); text.innerText = label;
+  if (ageMs > 0) seen.innerText = `(${Math.floor(ageMs / 1000)}s ago)`;
 }
 
-// ── Chart ──────────────────────────────────────────────────
 Chart.defaults.color = '#4a6080';
-Chart.defaults.font.family = "'DM Mono', monospace";
-Chart.defaults.font.size   = 10;
+Chart.defaults.font.family = "'Geist Mono', monospace";
+Chart.defaults.font.size = 10;
 
-const chart = new Chart(document.getElementById('chart').getContext('2d'), {
+const createChart = (ctx, label, color, bg) => new Chart(document.getElementById(ctx).getContext('2d'), {
   type: 'line',
-  data: {
-    labels: [],
-    datasets: [
-      { label:'Curah Hujan (mm)', data:[], borderColor:'#4f8ef7', backgroundColor:'rgba(79,142,247,.07)', borderWidth:2, tension:.3, fill:true, pointRadius:0 },
-      { label:'Tinggi Air (cm)',  data:[], borderColor:'#2dce74', backgroundColor:'rgba(45,206,116,.07)', borderWidth:2, tension:.3, fill:true, pointRadius:0, yAxisID:'y2' },
-      { label:'Output (%)',       data:[], borderColor:'#f0ad3f', backgroundColor:'transparent', borderWidth:1.5, borderDash:[4,3], tension:.3, pointRadius:0, yAxisID:'y3' },
-    ]
-  },
-  options: {
-    responsive:true, animation:false,
-    plugins:{ legend:{ labels:{ color:'#6b83a0', boxWidth:10 } } },
-    scales:{
-      x:  { ticks:{color:'#3d5270', maxTicksLimit:8}, grid:{color:'#111c30'} },
-      y:  { title:{display:true,text:'mm',color:'#4a6080'}, grid:{color:'#111c30'}, ticks:{color:'#3d5270'} },
-      y2: { position:'right', title:{display:true,text:'cm',color:'#4a6080'}, grid:{drawOnChartArea:false}, ticks:{color:'#3d5270'} },
-      y3: { position:'right', min:0, max:100, title:{display:true,text:'%',color:'#4a6080'}, grid:{drawOnChartArea:false}, ticks:{color:'#3d5270'} },
-    }
-  }
+  data: { labels: [], datasets: [{ label, data: [], borderColor: color, backgroundColor: bg, borderWidth: 2, tension: .3, fill: true, pointRadius: 0 }] },
+  options: { responsive: true, animation: false, plugins: { legend: { labels: { color: '#6b83a0', boxWidth: 10 } } }, scales: { x: { ticks: { color: '#3d5270', maxTicksLimit: 6 }, grid: { color: '#111c30' } }, y: { ticks: { color: '#3d5270' }, grid: { color: '#111c30' } } } }
 });
 
-// ── Status ─────────────────────────────────────────────────
-function setStatus(pct) {
-  const hc  = document.getElementById('heroCard');
-  const pg  = document.getElementById('prog');
-  const pEl = document.getElementById('fuzzy_pct');
-  const bdg = document.getElementById('status_badge');
-  const bdot= document.getElementById('badge_dot');
-  const txt = document.getElementById('status_text');
-  let c, g, label;
-  if (pct > 70) {
-    c='#f25555'; g='rgba(242,85,85,.3)'; label='⚠ BAHAYA';
-  } else if (pct > 40) {
-    c='#f0ad3f'; g='rgba(240,173,63,.3)'; label='⚡ SIAGA';
+const chartRain = createChart('chartRain', 'Curah Hujan (mm)', '#4f8ef7', 'rgba(79,142,247,.1)');
+const chartWater = createChart('chartWater', 'Tinggi Air (Visual)', '#2dce74', 'rgba(45,206,116,.1)');
+const chartTemp = createChart('chartTemp', 'Suhu (°C)', '#ff6b6b', 'rgba(255,107,107,.1)');
+const chartHumidity = createChart('chartHumidity', 'Kelembaban (%)', '#845ef7', 'rgba(132,94,247,.1)');
+const chartWind = createChart('chartWind', 'Kecepatan Angin (m/s)', '#ffd43b', 'rgba(255,212,59,.1)');
+
+function pushHistory(t, data) {
+  [histTime, histRain, histWater, histOut, histTemp, histHumidity, histWind].forEach((a, i) => {
+    const val = [t, data.curah_hujan, data.tinggi_air, data.output, data.suhu, data.kelembaban, data.kecepatan_angin][i];
+    a.push(val); if (a.length > MAX_HIST) a.shift();
+  });
+}
+
+function redrawCharts() {
+  chartRain.data.labels = [...histTime]; chartRain.data.datasets[0].data = [...histRain]; chartRain.update('none');
+  chartWater.data.labels = [...histTime]; chartWater.data.datasets[0].data = [...histWater]; chartWater.update('none');
+  chartTemp.data.labels = [...histTime]; chartTemp.data.datasets[0].data = [...histTemp]; chartTemp.update('none');
+  chartHumidity.data.labels = [...histTime]; chartHumidity.data.datasets[0].data = [...histHumidity]; chartHumidity.update('none');
+  chartWind.data.labels = [...histTime]; chartWind.data.datasets[0].data = [...histWind]; chartWind.update('none');
+}
+
+function updateDashboard(data) {
+  document.getElementById("valAir").innerHTML = fmt(data.tinggi_air) + '<span class="sensor-unit"></span>';
+  document.getElementById("valHujan").innerHTML = fmt(data.curah_hujan) + '<span class="sensor-unit">mm</span>';
+  document.getElementById("valSuhu").innerHTML = fmt(data.suhu) + '<span class="sensor-unit">°C</span>';
+  document.getElementById("valLembab").innerHTML = fmt(data.kelembaban) + '<span class="sensor-unit">%</span>';
+  document.getElementById("valAngin").innerHTML = fmt(data.kecepatan_angin) + '<span class="sensor-unit">m/s</span>';
+
+  document.getElementById("fuzzyOut").textContent = fmt(data.output);
+  currentFuzzyOutput = data.output;
+
+  const pct = Math.max(0, Math.min(100, (data.tinggi_air / 300) * 100));
+  document.getElementById("gaugeFill").style.height = pct + "%";
+
+  const hero = document.getElementById("statusHero");
+  const statusEl = document.getElementById("statusValue");
+  const gaugeFill = document.getElementById("gaugeFill");
+
+  const label = data.status ? data.status.toUpperCase() : "AMAN";
+  let color;
+
+  if (label === "BAHAYA") {
+    color = "var(--bahaya)";
+  } else if (label === "WASPADA") {
+    color = "var(--siaga)";
   } else {
-    c='#2dce74'; g='rgba(45,206,116,.25)'; label='✔ AMAN';
+    color = "var(--aman)";
   }
-  hc.style.setProperty('--hcolor', c);
-  hc.style.setProperty('--hglow',  g);
-  hc.style.setProperty('--hglow2', g);
-  // set semantic class for styling variants
-  hc.classList.remove('siaga','bahaya','aman');
-  if (label.includes('SIAGA')) hc.classList.add('siaga');
-  else if (label.includes('BAHAYA')) hc.classList.add('bahaya');
-  else hc.classList.add('aman');
-  pEl.style.color      = c;
-  pg.style.background  = c;
-  pg.style.boxShadow   = `0 0 10px ${g}`;
-  pg.style.width       = pct + '%';
-  bdg.style.background  = g.replace('.3',',.12').replace('.25',',.1');
-  bdg.style.borderColor = g.replace('.3',',.4').replace('.25',',.35');
-  bdg.style.color       = c;
-  bdot.style.background = c;
-  txt.innerText = label;
+
+  statusEl.textContent = label;
+  statusEl.style.setProperty("--status-color", color);
+  hero.style.setProperty("--status-glow", color);
+  gaugeFill.style.background = `linear-gradient(180deg, ${color}, var(--water))`;
+
+  const t = formatTime();
+  pushHistory(t, data);
+  redrawCharts();
 }
 
-// ── Correlation ────────────────────────────────────────────
-function setCorr(r, n) {
-  document.getElementById('corr_r').innerText = r.toFixed(3);
-  document.getElementById('corr_sample').innerText = n;
-  document.getElementById('corr_thumb').style.left = (((r+1)/2)*100)+'%';
-  const abs = Math.abs(r);
-  let d = 'Tidak berkorelasi';
-  if (n < 2)      d = 'Belum cukup data';
-  else if(abs>=.9) d = r>0?'Sangat kuat ↑':'Sangat kuat ↓';
-  else if(abs>=.7) d = r>0?'Kuat ↑':'Kuat ↓';
-  else if(abs>=.5) d = 'Sedang';
-  else if(abs>=.3) d = 'Lemah';
-  document.getElementById('corr_desc').innerText = d;
-}
+function fmt(v) { return v != null ? Number(v).toFixed(1) : "–"; }
+function formatTime() { return new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
 
-// ── Helpers ────────────────────────────────────────────────
-const now = ()=> new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-const rainCat  = v => v < 10?'🟢 Ringan': v<40?'🟡 Sedang':'🔴 Lebat';
-const waterCat = v => v < 80?'🟢 Aman'  : v<200?'🟡 Waspada':'🔴 Bahaya';
+function updateGateStatus(status, position = 0, mode = 'automatic') {
+  gateStatus = status; gatePosition = position; gateMode = mode;
+  const gateDot = document.getElementById('gateDot'), gateStatusEl = document.getElementById('gateStatus');
+  const gatePositionEl = document.getElementById('gatePosition'), gateModeEl = document.getElementById('gateMode');
 
-// ── CSV Logger (ke Database) ─────────────────────────────
-const CSV_KEY = 'fews_csv_log';
-let csvRows = [];
-let csvCountdown = 10;
-let lastData = null;
-
-// Load cache dari localStorage
-try {
-  const saved = localStorage.getItem(CSV_KEY);
-  if (saved) {
-    csvRows = JSON.parse(saved);
-    updateCsvUI();
+  if (status === 'open' || status === 'half') {
+    gateDot.classList.add('open');
+    gateStatusEl.textContent = status === 'open' ? 'TERBUKA' : 'SETENGAH';
+  } else {
+    gateDot.classList.remove('open');
+    gateStatusEl.textContent = 'TERTUTUP';
   }
-} catch(e) {
-  csvRows = [];
+  gatePositionEl.textContent = Math.round(position) + '%';
+  gateModeEl.textContent = mode === 'automatic' ? 'Otomatis' : 'Manual';
+  gateModeEl.style.color = mode === 'automatic' ? 'var(--aman)' : 'var(--siaga)';
+
+  document.getElementById('btnOpen').disabled = !gateOverride;
+  document.getElementById('btnHalf').disabled = !gateOverride;
+  document.getElementById('btnClose').disabled = !gateOverride;
 }
 
-function statusLabel(pct) {
-  if (pct > 70) return 'BAHAYA';
-  if (pct > 40) return 'SIAGA';
-  return 'AMAN';
-}
+async function setGateManual(action) {
+  if (!gateOverride) { alert('Override harus diaktifkan terlebih dahulu'); return; }
+  let newPosition = 0; let newStatus = 'closed';
+  if (action === 'open') { newPosition = 100; newStatus = 'open'; }
+  else if (action === 'half') { newPosition = 50; newStatus = 'half'; }
 
-async function appendCsvRow(d) {
-  const ts = new Date().toLocaleString('id-ID', { hour12:false });
-  const row = {
-    timestamp:       ts,
-    curah_hujan:     d.curah_hujan,
-    tinggi_air:      d.tinggi_air,
-    suhu:            d.suhu,
-    kelembaban:      d.kelembaban,
-    kecepatan_angin: d.kecepatan_angin,
-    output:          d.output,
-    korelasi_r:      d.korelasi_r,
-    status:          statusLabel(d.output),
-  };
-  
-  // Save ke database via API
   try {
-    const res = await fetch('/api/log', {
+    await fetch(`${API_BASE}/api/gate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(row),
+      body: JSON.stringify({ mode: 'MANUAL', position: newPosition }),
     });
-    if (res.ok) {
-      csvRows.push(row);
-      // persist to localStorage as backup
-      try { localStorage.setItem(CSV_KEY, JSON.stringify(csvRows)); } catch(e){}
-      updateCsvUI();
-    }
-  } catch(err) {
-    console.error('Error saving log:', err);
-  }
+  } catch (e) { console.error('Gagal kirim perintah gate:', e); }
 
-  // Flash dot (instant, no animation)
-  const dot = document.getElementById('csv_dot');
-  dot.style.opacity = '0.5';
-  setTimeout(()=> dot.style.opacity = '1', 100);
+  updateGateStatus(newStatus, newPosition, 'manual');
+  const buttonId = action === 'open' ? 'btnOpen' : action === 'half' ? 'btnHalf' : 'btnClose';
+  const button = document.getElementById(buttonId);
+  button.style.opacity = '0.7'; setTimeout(() => { button.style.opacity = '1'; }, 200);
+}
+
+async function toggleOverride(enabled) {
+  gateOverride = enabled;
+  const overrideLabel = document.getElementById('overrideLabel'), overrideInfo = document.getElementById('overrideInfo');
+
+  if (enabled) {
+    overrideLabel.textContent = 'Override ON'; overrideLabel.style.color = 'var(--aman)'; overrideInfo.style.color = 'var(--aman)';
+    overrideInfo.textContent = '✓ Mode manual aktif - Anda dapat mengontrol pintu air';
+    document.getElementById('btnOpen').disabled = false; document.getElementById('btnHalf').disabled = false; document.getElementById('btnClose').disabled = false;
+  } else {
+    overrideLabel.textContent = 'Override OFF'; overrideLabel.style.color = 'var(--text)'; overrideInfo.style.color = 'var(--text-dim)';
+    overrideInfo.textContent = 'Saat diaktifkan, pintu air dapat dikontrol secara manual';
+    document.getElementById('btnOpen').disabled = true; document.getElementById('btnHalf').disabled = true; document.getElementById('btnClose').disabled = true;
+    try {
+      await fetch(`${API_BASE}/api/gate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'AUTO' }),
+      });
+    } catch (e) { console.error('Gagal kembali ke AUTO:', e); }
+  }
+}
+
+try { const saved = localStorage.getItem(CSV_KEY); if (saved) { csvRows = JSON.parse(saved); updateCsvUI(); } } catch (e) { csvRows = []; }
+
+async function appendCsvRow(d) {
+  const ts = new Date().toLocaleString('id-ID', { hour12: false });
+  const row = { timestamp: ts, curah_hujan: d.curah_hujan, tinggi_air: d.tinggi_air, suhu: d.suhu, kelembaban: d.kelembaban, kecepatan_angin: d.kecepatan_angin, output: d.output, status: d.status || "AMAN", status_dt: d.status_dt || "AMAN" };
+  csvRows.push(row);
+  try { localStorage.setItem(CSV_KEY, JSON.stringify(csvRows)); } catch (e) { }
+  updateCsvUI();
+  const dot = document.getElementById('csv_dot'); dot.style.opacity = '0.5'; setTimeout(() => dot.style.opacity = '1', 100);
 }
 
 function updateCsvUI() {
@@ -294,245 +359,40 @@ function updateCsvUI() {
 
 function downloadCSV() {
   if (!csvRows.length) return;
-  const header = 'Timestamp,Curah_Hujan_mm,Tinggi_Air_cm,Suhu_C,Kelembaban_%,Kec_Angin_ms,Output_%,Korelasi_r,Status\n';
-  const data = csvRows.map(r => [
-    `"${r.timestamp}"`,
-    r.curah_hujan.toFixed(2),
-    r.tinggi_air.toFixed(2),
-    r.suhu.toFixed(2),
-    r.kelembaban.toFixed(2),
-    r.kecepatan_angin.toFixed(2),
-    r.output.toFixed(2),
-    r.korelasi_r.toFixed(4),
-    r.status
-  ].join(',')).join('\n');
-  
-  const blob = new Blob([header + data], { type:'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  const ts   = new Date().toISOString().slice(0,16).replace('T','_').replace(/:/g,'');
-  a.href     = url;
-  a.download = `fews_log_${ts}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const header = 'Timestamp,Curah_Hujan_mm,Tinggi_Air_x10,Suhu_C,Kelembaban_%,Kec_Angin_ms,Output_%,Status_Fuzzy,Status_DecisionTree\n';
+  const data = csvRows.map(r => [`"${r.timestamp}"`, r.curah_hujan.toFixed(2), r.tinggi_air.toFixed(2), r.suhu.toFixed(2), r.kelembaban.toFixed(2), r.kecepatan_angin.toFixed(2), r.output.toFixed(2), r.status, r.status_dt].join(',')).join('\n');
+  const blob = new Blob([header + data], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = `fews_log_${new Date().toISOString().slice(0, 16).replace('T', '_').replace(/:/g, '')}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
 function clearCSV() {
   if (!csvRows.length) return;
   if (!confirm(`Hapus ${csvRows.length} baris log CSV?`)) return;
   csvRows = [];
-  try { localStorage.removeItem(CSV_KEY); } catch(e){}
+  try { localStorage.removeItem(CSV_KEY); } catch (e) { }
   updateCsvUI();
 }
 
-// Countdown & log trigger
 setInterval(() => {
-  csvCountdown--;
-  document.getElementById('csv_countdown').innerText = csvCountdown;
-  if (csvCountdown <= 0) {
-    csvCountdown = 10;
-    // Only append CSV row if ESP is online and lastData exists
-    if (lastData && espStatus === 'online') appendCsvRow(lastData);
-  }
+  csvCountdown--; document.getElementById('csv_countdown').innerText = csvCountdown;
+  if (csvCountdown <= 0) { csvCountdown = 10; if (lastData) appendCsvRow(lastData); }
 }, 1000);
 
-// ── Apply ESP32 IP Config ────────────────────────────────────────
-function applyIp() {
-  const raw = document.getElementById('espIp').value.trim();
-  if (!raw) {
-    alert('Masukkan IP address ESP32 terlebih dahulu');
-    return;
-  }
-
-  // Format URL dengan http:// jika belum ada
-  let url = raw;
-  if (!url.startsWith('http://') && !url.startsWith('https://')) {
-    url = 'http://' + url;
-  }
-
-  ESP_IP = url;
-  localStorage.setItem(ESP_IP_KEY, ESP_IP);
-  
-  document.getElementById('conn_status').innerText = '✓ IP tersimpan!';
-  document.getElementById('conn_status').style.color = 'var(--green)';
-  
-  // Fetch data immediately
-  fetchData();
-  
-  // Reset status message after 3 seconds
-  setTimeout(() => {
-    document.getElementById('conn_status').innerText = '';
-  }, 3000);
-}
-
-// ── Fetch Data ──────────────────────────────────────────
-async function fetchData() {
+setInterval(() => {
   try {
-    const res  = await fetch(`${ESP_IP}/api`, { signal: AbortSignal.timeout(4000) });
-    const d    = await res.json();
-
-    // conn_status element removed from UI
-    // document.getElementById('conn_status').className = 'conn-ok';
-    // document.getElementById('conn_status').innerText  = '✓ Terhubung — '+now();
-
-    document.getElementById('rain').innerText  = d.curah_hujan.toFixed(1);
-    document.getElementById('water').innerText = d.tinggi_air.toFixed(1);
-    document.getElementById('temp').innerText  = d.suhu.toFixed(1);
-    document.getElementById('hum').innerText   = d.kelembaban.toFixed(1);
-    document.getElementById('wind').innerText  = d.kecepatan_angin.toFixed(1);
-    document.getElementById('rain_cat').innerText  = rainCat(d.curah_hujan);
-    document.getElementById('water_cat').innerText = waterCat(d.tinggi_air);
-
-    document.getElementById('fuzzy_pct').innerHTML = d.output.toFixed(1)+'<span>%</span>';
-    setStatus(d.output);
-
-    document.getElementById('mi_water').innerText = d.tinggi_air.toFixed(1)+' cm';
-    document.getElementById('mi_rain').innerText  = d.curah_hujan.toFixed(1)+' mm';
-
-    setCorr(d.korelasi_r, d.sample_count);
-
-    document.getElementById('info_uptime').innerText = d.uptime;
-    document.getElementById('hdr_uptime').innerText  = d.uptime;
-    document.getElementById('info_staip').innerText  = ESP_IP.replace('https://','').replace('http://','');
-    if (d.data_age_sec !== undefined) {
-      const age = d.data_age_sec;
-      document.getElementById('info_age').innerText = age + ' detik';
-      document.getElementById('info_age').style.color = age > 30 ? 'var(--red)' : age > 15 ? 'var(--yellow)' : 'var(--green)';
-    }
-
-    // ── Parameter Pengujian Baru ──────────────────────────
-    // [1] Akurasi
-    if (d.akurasi) {
-      document.getElementById('acc_pct').innerText = d.akurasi.persen?.toFixed(1) || '--';
-      document.getElementById('acc_pred_cat').innerText = d.akurasi.kategori_prediksi || '--';
-      document.getElementById('acc_actual_cat').innerText = d.akurasi.kategori_aktual || '--';
-      document.getElementById('acc_total').innerText = d.akurasi.total_prediksi || '0';
-      document.getElementById('acc_correct').innerText = d.akurasi.benar || '0';
-    }
-
-    // [2] Response Time
-    if (d.response_time) {
-      document.getElementById('resp_last').innerText = d.response_time.last_ms || '--';
-      document.getElementById('resp_avg').innerText = (d.response_time.avg_ms?.toFixed(1) || '--') + ' ms';
-      document.getElementById('resp_min').innerText = (d.response_time.min_ms || '--') + ' ms';
-      document.getElementById('resp_max').innerText = (d.response_time.max_ms || '--') + ' ms';
-      
-      // Set response time status based on avg time
-      let respStatus = 'Baik ✓';
-      if (d.response_time.avg_ms > 5000) respStatus = 'Lambat ⚠';
-      if (d.response_time.avg_ms > 8000) respStatus = 'Sangat Lambat ✗';
-      document.getElementById('resp_status').innerText = respStatus;
-      document.getElementById('resp_status').style.color = 
-        d.response_time.avg_ms > 8000 ? 'var(--red)' :
-        d.response_time.avg_ms > 5000 ? 'var(--yellow)' : 'var(--green)';
-    }
-
-    // [3] Stabilitas Data
-    if (d.stabilitas) {
-      document.getElementById('stab_water_cv').innerText = d.stabilitas.cv_air?.toFixed(1) || '--';
-      document.getElementById('stab_water_status').innerText = d.stabilitas.status_air || '--';
-      document.getElementById('stab_water_bar').style.width = Math.min(d.stabilitas.cv_air || 0, 100) + '%';
-      document.getElementById('stab_water_bar').style.background = 
-        d.stabilitas.cv_air < 10 ? '#2dce74' :
-        d.stabilitas.cv_air < 25 ? '#f0ad3f' : '#f25555';
-
-      document.getElementById('stab_rain_cv').innerText = d.stabilitas.cv_hujan?.toFixed(1) || '--';
-      document.getElementById('stab_rain_status').innerText = d.stabilitas.status_hujan || '--';
-      document.getElementById('stab_rain_bar').style.width = Math.min(d.stabilitas.cv_hujan || 0, 100) + '%';
-      document.getElementById('stab_rain_bar').style.background = 
-        d.stabilitas.cv_hujan < 10 ? '#2dce74' :
-        d.stabilitas.cv_hujan < 25 ? '#f0ad3f' : '#f25555';
-    }
-
-    lastData = d;
-
-    // Update ESP32 status indicator
-    espLastData = Date.now();
-    updateESPStatus();
-
-    const t = now();
-    [histTime,histRain,histWater,histOut].forEach((a,i)=>{
-      const val = [t, d.curah_hujan, d.tinggi_air, d.output][i];
-      a.push(val); if(a.length>MAX_HIST) a.shift();
-    });
-    chart.data.labels = [...histTime];
-    chart.data.datasets[0].data = [...histRain];
-    chart.data.datasets[1].data = [...histWater];
-    chart.data.datasets[2].data = [...histOut];
-    chart.update('none');
-
-  } catch(err) {
-    // Error handling - removed conn_status element
-    console.error('Error:', err.message);
-    
-    // Reset all values to 0 when ESP is offline
-    document.getElementById('rain').innerText  = '0';
-    document.getElementById('water').innerText = '0';
-    document.getElementById('temp').innerText  = '0';
-    document.getElementById('hum').innerText   = '0';
-    document.getElementById('wind').innerText  = '0';
-    document.getElementById('rain_cat').innerText  = '—';
-    document.getElementById('water_cat').innerText = '—';
-    document.getElementById('fuzzy_pct').innerHTML = '0<span>%</span>';
-    setStatus(0);
-    document.getElementById('mi_water').innerText = '0 cm';
-    document.getElementById('mi_rain').innerText  = '0 mm';
-    setCorr(0, 0);
-    
-    // Reset parameter pengujian
-    document.getElementById('acc_pct').innerText = '--';
-    document.getElementById('acc_pred_cat').innerText = '--';
-    document.getElementById('acc_actual_cat').innerText = '--';
-    document.getElementById('acc_total').innerText = '0';
-    document.getElementById('acc_correct').innerText = '0';
-    
-    document.getElementById('resp_last').innerText = '--';
-    document.getElementById('resp_avg').innerText = '-- ms';
-    document.getElementById('resp_min').innerText = '-- ms';
-    document.getElementById('resp_max').innerText = '-- ms';
-    document.getElementById('resp_status').innerText = 'Offline';
-    document.getElementById('resp_status').style.color = 'var(--red)';
-    
-    document.getElementById('stab_water_cv').innerText = '--';
-    document.getElementById('stab_water_status').innerText = '--';
-    document.getElementById('stab_water_bar').style.width = '0%';
-    document.getElementById('stab_rain_cv').innerText = '--';
-    document.getElementById('stab_rain_status').innerText = '--';
-    document.getElementById('stab_rain_bar').style.width = '0%';
-    
-    // Clear lastData and update ESP status
-    lastData = null;
-    updateESPStatus();
-  }
-}
-
-
-// ── Check Database Health ────────────────────────────────
-async function checkDBHealth() {
-  try {
-    const res = await fetch(`${ESP_IP}/api/health`, { signal: AbortSignal.timeout(4000) });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.database === 'connected') {
-        dbLastCheck = Date.now();
-        updateDBStatus();
-      } else {
-        setDBStatus('offline');
+    if (lastRainIncreaseTs && (Date.now() - lastRainIncreaseTs) >= 60000) {
+      if (lastData && Number(lastData.curah_hujan) !== 0) {
+        lastData.curah_hujan = 0; lastRainValue = 0; lastRainIncreaseTs = null;
+        updateDashboard(Object.assign({}, lastData));
       }
-    } else {
-      setDBStatus('offline');
     }
-  } catch (err) {
-    setDBStatus('offline');
-  }
-}
+  } catch (e) { }
+}, 1000);
 
-setInterval(fetchData, 5000);                       // Fetch every 5 sec (optimized)
-setInterval(updateESPStatus, 2000);                // Update ESP status every 2 sec
-setInterval(updateDBStatus, 2000);                 // Update DB status every 2 sec
-setInterval(checkDBHealth, 10000);                 // Check DB health every 10 sec
-loadESPIp();      // Load ESP32 IP from localStorage
-initTheme();      // Initialize theme on page load
-fetchData();
+setInterval(updateESPStatus, 2000);
+setInterval(updateDBStatus, 2000);
+initTheme();
+updateCsvUI();
+loadInitialData();

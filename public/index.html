@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FEWS | Flood Early Warning System</title>
+<title>FEWS — Flood Early Warning System</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -13,15 +14,19 @@
 <header class="hdr">
   <div class="hdr-brand">
     <div>
-      <div class="hdr-title">FLOOD EARLY WARNING SYSTEM</div>
-      <div class="hdr-sub">ESP32 · Pearson Correlation · Realtime</div>
+      <div class="hdr-eyebrow">Teknik Mesin · Universitas Negeri Semarang  </div>
+      <div class="hdr-title">Flood Early Warning System</div>
     </div>
   </div>
   <div class="hdr-live">
     <div style="display:flex; align-items:center; gap:8px; padding-right:14px; margin-right:6px; border-right:1px solid var(--border);">
-      <div class="dot"></div>
-      <span id="hdr_uptime">00:00:00</span>
-      <span style="font-size:10px; color:var(--text-dim);">Dashboard</span>
+      <div class="conn-dot" id="connDot"></div>
+      <span id="connText">Menghubungkan ke Supabase…</span>
+      <span style="font-size:10px; color:var(--text-dim);">REALTIME</span>
+      <div style="display:flex; flex-direction:column; margin-left:8px; align-items:flex-start;">
+        <span style="font-size:12px;">Pesan: <strong id="metaCount">0</strong></span>
+        <span style="font-size:11px; color:var(--text-dim);">Waktu: <span id="metaTime">-</span></span>
+      </div>
     </div>
     <div style="display:flex; align-items:center; gap:7px; padding-right:14px; margin-right:6px; border-right:1px solid var(--border);">
       <div class="esp-status-dot" id="esp_status_dot"></div>
@@ -33,7 +38,7 @@
       <span id="db_status_text">Database: Offline</span>
       <span id="db_last_seen" style="font-size:10px; color:var(--text-dim);">-</span>
     </div>
-    <button class="btn-theme" id="btn_theme" onclick="toggleTheme()" title="Toggle dark/light mode">🌙</button>
+    <button class="btn-theme" id="btn_theme" onclick="toggleTheme()" title="Toggle dark/light mode">○</button>
   </div>
 </header>
 
@@ -43,238 +48,153 @@
   <div class="csv-bar">
     <div class="csv-info">
       <div class="csv-dot" id="csv_dot"></div>
-      <span>Logger CSV → Database</span>
+      <span>Logger CSV</span>
     </div>
     <span class="csv-count">Tersimpan: <strong id="csv_count">0</strong> baris</span>
     <span style="font-size:11px;font-family:var(--mono);color:var(--text-dim)">Interval: 10 detik</span>
-    <button class="btn-csv" id="btn_download" onclick="downloadCSV()" disabled>⬇ Unduh CSV</button>
-    <button class="btn-csv-clear" onclick="clearCSV()">✕ Hapus Log</button>
+    <button class="btn-csv" id="btn_download" onclick="downloadCSV()" disabled>Unduh CSV</button>
+    <button class="btn-csv-clear" onclick="clearCSV()">Hapus Log</button>
     <span class="csv-timer">Log berikutnya: <span id="csv_countdown">10</span>d</span>
   </div>
 
-  <!-- ESP32 IP Config Bar -->
-  <div class="cfg">
-    <label>IP ESP32:</label>
-    <input type="text" id="espIp" placeholder="Contoh: 192.168.137.239 atau http://192.168.4.1" />
-    <button class="btn-conn" onclick="applyIp()">⚡ Hubungkan</button>
-    <span id="conn_status" style="font-size:11px; font-family:var(--mono); color:var(--text-dim); margin-left:auto;"></span>
-  </div>
-
-  <!-- Row 1: 5 Sensor Cards -->
-  <div class="row r5">
-
-    <div class="card" style="--stripe:var(--green)">
-      <div class="c-label">🌧️ Curah Hujan</div>
-      <div class="c-val"><span id="rain">--</span><span class="c-unit">mm</span></div>
-      <div class="c-sub" id="rain_cat">–</div>
-    </div>
-
-    <div class="card" style="--stripe:var(--green)">
-      <div class="c-label">📏 Tinggi Air</div>
-      <div class="c-val"><span id="water">--</span><span class="c-unit">cm</span></div>
-      <div class="c-sub" id="water_cat">–</div>
-    </div>
-
-    <div class="card" style="--stripe:var(--green)">
-      <div class="c-label">🌡️ Suhu</div>
-      <div class="c-val"><span id="temp">--</span><span class="c-unit">°C</span></div>
-      <div class="c-sub">Lingkungan</div>
-    </div>
-
-    <div class="card" style="--stripe:var(--green)">
-      <div class="c-label">💧 Kelembaban</div>
-      <div class="c-val"><span id="hum">--</span><span class="c-unit">%</span></div>
-      <div class="c-sub">Udara</div>
-    </div>
-
-    <div class="card" style="--stripe:var(--green)">
-      <div class="c-label">💨 Kec. Angin</div>
-      <div class="c-val"><span id="wind">--</span><span class="c-unit">m/s</span></div>
-      <div class="c-sub">Kecepatan</div>
-    </div>
-
-  </div>
-
-  <!-- Row 2: Status Hero + Right Panel -->
-  <div class="row r2">
-
-    <!-- Hero Status -->
-    <div class="hero alt" id="heroCard">
-      <div class="hero-glow" id="heroGlow"></div>
-      <div class="hero-label">⚡ Potensi Banjir</div>
-      <div>
-        <div class="hero-pct" id="fuzzy_pct">--<span>%</span></div>
-        <div class="badge" id="status_badge">
-          <span class="badge-dot" id="badge_dot"></span>
-          <span id="status_text">MENUNGGU DATA</span>
-        </div>
-        <div class="prog-wrap">
-          <div class="prog-track"><div class="prog-fill" id="prog" style="width:0%"></div></div>
-        </div>
+  <!-- STATUS HERO with Gauge -->
+  <div class="status-hero" id="statusHero">
+    <div>
+      <div class="gauge">
+        <div class="gauge-fill" id="gaugeFill"></div>
+        <div class="gauge-mark" style="bottom: 8%;">0</div>
+        <div class="gauge-mark" style="bottom: 33.3%;">100</div>
+        <div class="gauge-mark" style="bottom: 66.6%;">200</div>
+        <div class="gauge-mark" style="bottom: 95%;">300</div>
       </div>
-      <div class="mini-row">
-        <div class="mini-item">
-          <div class="mk">Input 1</div>
-          <div class="mv">Tinggi Air</div>
-          <div class="mv-sm" id="mi_water">-- cm</div>
-        </div>
-        <div class="mini-item">
-          <div class="mk">Input 2</div>
-          <div class="mv">Curah Hujan</div>
-          <div class="mv-sm" id="mi_rain">-- mm</div>
-        </div>
-      </div>
+      <div class="gauge-label">TINGGI AIR (CM)</div>
     </div>
-
-    <!-- Right: Correlation + Info -->
-    <div style="display:flex; flex-direction:column; gap:12px;">
-
-      <div class="card" style="--stripe:var(--green)">
-        <div class="c-label" style="color:var(--green)">📊 Korelasi Pearson (r)</div>
-        <div class="corr-val" id="corr_r">0.000</div>
-        <div class="corr-bar-wrap">
-          <div class="corr-scale">
-            <span>−1</span>
-            <span id="corr_desc">Belum cukup data</span>
-            <span>+1</span>
-          </div>
-          <div class="corr-track">
-            <div class="corr-fill"></div>
-            <div class="corr-thumb" id="corr_thumb" style="left:50%"></div>
-          </div>
-        </div>
-        <div class="corr-desc">Sampel: <span id="corr_sample">0</span> / ∞ (unlimited)</div>
-      </div>
-
-      <div class="card" style="--stripe:var(--green); flex:1">
-        <div class="c-label">ℹ️ Info Sistem</div>
-        <div class="info-grid">
-          <div class="ig-item">
-            <div class="ig-k">Uptime</div>
-            <div class="ig-v" id="info_uptime">--:--:--</div>
-          </div>
-          <div class="ig-item">
-            <div class="ig-k">AP IP</div>
-            <div class="ig-v">192.168.4.1</div>
-          </div>
-          <div class="ig-item">
-            <div class="ig-k">Server</div>
-            <div class="ig-v" id="info_staip" style="font-size:10px">--</div>
-          </div>
-          <div class="ig-item">
-            <div class="ig-k">Data Age</div>
-            <div class="ig-v" id="info_age">-- s</div>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- Row 3: Parameter Pengujian (Testing Parameters) -->
-  <div style="margin-top: 20px;">
-    <div style="font-size: 12px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; padding: 0 8px;">📊 Parameter Pengujian Sistem</div>
-    
-    <div class="row r3">
-      <!-- Card 1: Akurasi -->
-      <div class="card" style="--stripe:var(--green)">
-        <div class="c-label">🎯 Akurasi Prediksi</div>
-        <div class="c-val"><span id="acc_pct">--</span><span class="c-unit">%</span></div>
-        <div class="info-grid" style="font-size: 12px; margin-top: 12px;">
-          <div class="ig-item">
-            <div class="ig-k">Prediksi Fuzzy</div>
-            <div class="ig-v" id="acc_pred_cat" style="font-size:11px">--</div>
-          </div>
-          <div class="ig-item">
-            <div class="ig-k">Kondisi Aktual</div>
-            <div class="ig-v" id="acc_actual_cat" style="font-size:11px">--</div>
-          </div>
-          <div class="ig-item">
-            <div class="ig-k">Total Prediksi</div>
-            <div class="ig-v" id="acc_total" style="font-size:11px">0</div>
-          </div>
-          <div class="ig-item">
-            <div class="ig-k">Benar</div>
-            <div class="ig-v" id="acc_correct" style="font-size:11px">0</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Card 2: Response Time -->
-      <div class="card" style="--stripe:var(--green)">
-        <div class="c-label">⏱️ Response Time</div>
-        <div class="c-val"><span id="resp_last">--</span><span class="c-unit">ms</span></div>
-        <div class="info-grid" style="font-size: 12px; margin-top: 12px;">
-          <div class="ig-item">
-            <div class="ig-k">Rata-rata</div>
-            <div class="ig-v" id="resp_avg" style="font-size:11px">-- ms</div>
-          </div>
-          <div class="ig-item">
-            <div class="ig-k">Min</div>
-            <div class="ig-v" id="resp_min" style="font-size:11px">-- ms</div>
-          </div>
-          <div class="ig-item">
-            <div class="ig-k">Max</div>
-            <div class="ig-v" id="resp_max" style="font-size:11px">-- ms</div>
-          </div>
-          <div class="ig-item">
-            <div class="ig-k">Status</div>
-            <div class="ig-v" id="resp_status" style="font-size:11px">Baik ✓</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Card 3: Stabilitas Data -->
-      <div class="card" style="--stripe:var(--green)">
-        <div class="c-label">📈 Stabilitas Data</div>
-        <div style="margin-top: 8px;">
-          <div style="margin-bottom: 10px;">
-            <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">Tinggi Air</div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <div style="flex: 1;">
-                <div class="stab-bar-wrap">
-                  <div class="stab-bar" id="stab_water_bar" style="width: 0%; background: #2dce74;"></div>
-                </div>
-              </div>
-              <div style="font-size: 11px; min-width: 50px; text-align: right;">
-                <span id="stab_water_cv">--</span>%
-              </div>
-            </div>
-            <div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;" id="stab_water_status">--</div>
-          </div>
-          
-          <div>
-            <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">Curah Hujan</div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <div style="flex: 1;">
-                <div class="stab-bar-wrap">
-                  <div class="stab-bar" id="stab_rain_bar" style="width: 0%; background: #4f8ef7;"></div>
-                </div>
-              </div>
-              <div style="font-size: 11px; min-width: 50px; text-align: right;">
-                <span id="stab_rain_cv">--</span>%
-              </div>
-            </div>
-            <div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;" id="stab_rain_status">--</div>
-          </div>
-        </div>
+    <div class="status-main">
+      <div class="status-eyebrow">Status Siaga</div>
+      <div class="status-value" id="statusValue">MENUNGGU DATA</div>
+      <div class="status-sub">
+        Output : <b id="fuzzyOut">–</b>
       </div>
     </div>
   </div>
 
-  <!-- Row 4: Chart (full width) -->
-  <div class="chart-card">
-    <div class="chart-hdr">
-      <span class="chart-ttl">Histori: Curah Hujan & Tinggi Air</span>
-      <span class="chart-sub">50 data terakhir</span>
+  <!-- SENSOR GRID -->
+  <div class="sensors">
+    <div class="sensor-card">
+      <div class="sensor-label">Tinggi Air</div>
+      <div class="sensor-value" id="valAir">–<span class="sensor-unit">cm</span></div>
     </div>
-    <canvas id="chart" height="110"></canvas>
+    <div class="sensor-card">
+      <div class="sensor-label">Curah Hujan</div>
+      <div class="sensor-value" id="valHujan">–<span class="sensor-unit">mm</span></div>
+    </div>
+    <div class="sensor-card">
+      <div class="sensor-label">Suhu</div>
+      <div class="sensor-value" id="valSuhu">–<span class="sensor-unit">°C</span></div>
+    </div>
+    <div class="sensor-card">
+      <div class="sensor-label">Kelembaban</div>
+      <div class="sensor-value" id="valLembab">–<span class="sensor-unit">%</span></div>
+    </div>
+    <div class="sensor-card">
+      <div class="sensor-label">Kecepatan Angin</div>
+      <div class="sensor-value" id="valAngin">–<span class="sensor-unit">m/s</span></div>
+    </div>
+  </div>
+
+  <!-- GATE CONTROL SECTION -->
+  <div class="gate-control">
+    <div class="gate-status">
+      <div class="gate-header">
+        <div class="gate-label">Status Pintu Air</div>
+        <div class="gate-indicator" id="gateIndicator">
+          <span class="gate-dot" id="gateDot"></span>
+          <span id="gateStatus">TERTUTUP</span>
+        </div>
+      </div>
+      <div class="gate-details">
+        <div class="detail-item">
+          <div class="detail-label">Posisi</div>
+          <div class="detail-value" id="gatePosition">0%</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Mode</div>
+          <div class="detail-value" id="gateMode">Otomatis</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gate-controls">
+      <div class="control-section">
+        <div class="control-title">Kontrol Manual</div>
+        <div class="button-group">
+          <button class="btn-gate btn-open" id="btnOpen" onclick="setGateManual('open')">Buka</button>
+          <button class="btn-gate btn-half" id="btnHalf" onclick="setGateManual('half')">Setengah</button>
+          <button class="btn-gate btn-close" id="btnClose" onclick="setGateManual('close')">Tutup</button>
+        </div>
+      </div>
+
+      <div class="control-section">
+        <div class="control-title">Sistem Override</div>
+        <div class="toggle-group">
+          <label class="toggle-switch">
+            <input type="checkbox" id="overrideToggle" onchange="toggleOverride(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-label" id="overrideLabel">Override OFF</span>
+        </div>
+        <div class="override-info" id="overrideInfo">Saat diaktifkan, pintu air dapat dikontrol secara manual</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts: 5 separate graphs -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-hdr">
+        <span class="chart-ttl">Curah Hujan</span>
+        <span class="chart-sub">mm · 50 data terakhir</span>
+      </div>
+      <canvas id="chartRain" height="100"></canvas>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-hdr">
+        <span class="chart-ttl">Tinggi Air</span>
+        <span class="chart-sub">cm · 50 data terakhir</span>
+      </div>
+      <canvas id="chartWater" height="100"></canvas>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-hdr">
+        <span class="chart-ttl">Suhu</span>
+        <span class="chart-sub">°C · 50 data terakhir</span>
+      </div>
+      <canvas id="chartTemp" height="100"></canvas>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-hdr">
+        <span class="chart-ttl">Kelembaban</span>
+        <span class="chart-sub">% · 50 data terakhir</span>
+      </div>
+      <canvas id="chartHumidity" height="100"></canvas>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-hdr">
+        <span class="chart-ttl">Kecepatan Angin</span>
+        <span class="chart-sub">m/s · 50 data terakhir</span>
+      </div>
+      <canvas id="chartWind" height="100"></canvas>
+    </div>
   </div>
 
 </div>
 
 <footer>
-  FLOOD EARLY WARNING SYSTEM (FEWS) &copy; 2026 &nbsp;·&nbsp; ESP32 · Pearson Correlation &nbsp;·&nbsp; Dashboard v2.0
+  FEWS &copy; 2026 &nbsp;·&nbsp; ESP32 · Vercel · Supabase · Fuzzy Logic & Decision Tree · Dashboard v3.0
 </footer>
 
 <script src="client.js"></script>
