@@ -3,9 +3,9 @@
 // (postgres_changes pada tabel sensor_data), gate control lewat
 // REST API Vercel (/api/gate).
 
-// >>> ISI SESUAI PROJECT SUPABASE KAMU <<<
-const SUPABASE_URL = "https://xxxxxxxxxxxx.supabase.co"; // tanpa /rest/v1 di sisi client
-const SUPABASE_ANON_KEY = "eyJhbGci..."; // anon public key (aman ditaruh di client)
+// Project Supabase yang aktif
+const SUPABASE_URL = "https://qegrytzjbnqlngeqhjhhj.supabase.co"; // tanpa /rest/v1 di sisi client
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFlZ3J5dHpqbnFsbmdlcWhqaGhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMTM3OTMsImV4cCI6MjA5Mjc4OTc5M30.wgeB1t6QQVt66XdMfMdsgbJRjZ37TkOyMcLslUI1Ngw"; // anon public key
 
 const API_BASE = ""; // kosongkan jika client.js satu domain dengan Vercel API (default)
 const MAX_HIST = 50;
